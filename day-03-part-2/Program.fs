@@ -41,8 +41,6 @@ let instructionRegex = Regex(@"mul\((\d{1,3}),(\d{1,3})\)")
 
 let parseInstructions text =
     let rec innerParse isEnabled text results =
-        let m = parserRegex.Match(text)
-
         match text with
         | Regexer parserRegex [mulGroup; ""; ""; rest] when mulGroup.Length > 0 ->
             innerParse isEnabled rest (if isEnabled then (mulGroup :: results) else results)
