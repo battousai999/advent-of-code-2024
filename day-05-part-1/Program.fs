@@ -173,14 +173,8 @@ let rec isUpdateOrdered (update: string list) =
     | pageStr :: restStr ->
         let page = int pageStr
         let rest = restStr |> Seq.map int
+        let satisfiedForPage = rest |> Seq.forall (fun x -> (orderingComparer page x) |> Option.defaultValue true)
 
-        let satisfiedForPage =
-            rest
-                |> Seq.forall
-                    (fun x ->
-                        match (orderingComparer page x) with
-                        | Some b -> b
-                        | None -> true)
         if satisfiedForPage then isUpdateOrdered restStr else false
     | [] -> true
 
