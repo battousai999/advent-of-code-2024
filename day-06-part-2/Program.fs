@@ -167,29 +167,6 @@ let newTravelled (old: TravelledDirections) (newDirection: Direction) =
     | West when not old.West   -> { old with West = true }
     | _                        -> old
 
-let rec checkPathForTravelled (dir: Direction) (startingPoint: Point) =
-    match dir with
-    | North ->
-        match map[startingPoint.X, startingPoint.Y] with
-        | Obstacle -> false
-        | Travelled { North = true } -> true
-        | _ -> if startingPoint.Y - 1 >= 0 then checkPathForTravelled dir { startingPoint with Y = startingPoint.Y - 1 } else false
-    | East ->
-        match map[startingPoint.X, startingPoint.Y] with
-        | Obstacle -> false
-        | Travelled { East = true } -> true
-        | _ -> if startingPoint.X + 1 < sizeX then checkPathForTravelled dir { startingPoint with X = startingPoint.X + 1 } else false
-    | South ->
-        match map[startingPoint.X, startingPoint.Y] with
-        | Obstacle -> false
-        | Travelled { South = true } -> true
-        | _ -> if startingPoint.Y + 1 < sizeY then checkPathForTravelled dir { startingPoint with Y = startingPoint.Y + 1 } else false
-    | West ->
-        match map[startingPoint.X, startingPoint.Y] with
-        | Obstacle -> false
-        | Travelled { West = true } -> true
-        | _ -> if startingPoint.X - 1 >= 0 then checkPathForTravelled dir { startingPoint with X = startingPoint.X - 1 } else false
-
 let checkForLoop (map: Entity array2d) (direction: Direction) (point: Point) =
     match direction with
     | North ->
