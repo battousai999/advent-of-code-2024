@@ -92,7 +92,6 @@
 
 open System
 open System.IO
-open System.Linq
 
 type Point = {
     X: int
@@ -157,7 +156,8 @@ rawMap
 
                         map[xIndex, yIndex] <- entity))
 
-let newObstructions = ResizeArray<Point>()
+let startingGuardPosition = guardPosition
+let startingMap = Array2D.copy map
 
 let newTravelled (old: TravelledDirections) (newDirection: Direction) =
     match newDirection with
@@ -190,64 +190,47 @@ let rec checkPathForTravelled (dir: Direction) (startingPoint: Point) =
         | Travelled { West = true } -> true
         | _ -> if startingPoint.X - 1 >= 0 then checkPathForTravelled dir { startingPoint with X = startingPoint.X - 1 } else false
 
-let checkPotentialNewObstacle (direction: Direction) (point: Point) =
+let checkForLoop (map: Entity array2d) (direction: Direction) (point: Point) =
     match direction with
     | North ->
-        let potentialObstaclePoint = { point with Y = point.Y - 1 }
+        let pointToEvaluate = { point with Y = point.Y - 1 }
+
+        if pointToEvaluate.Y >= 0 then
+            match map[pointToEvaluate.X, pointToEvaluate.Y] with
+            | Travelled { North = true } -> true
+            | _ -> false
+        else
+            false
+    | East ->
         let pointToEvaluate = { point with X = point.X + 1 }
 
         if pointToEvaluate.X < sizeX then
-            // In addition to the match below, I need to check the line going in that direction
-            // to see if any of those (up until an obstacle) are Travelled { East = true }
-            if checkPathForTravelled East point then
-                newObstructions.Add(potentialObstaclePoint)
-
-            // match map[pointToEvaluate.X, pointToEvaluate.Y] with
-            // | Travelled { East = true } ->
-            //     newObstructions.Add(potentialObstaclePoint)
-            // | _ -> ()
-    | East ->
-        let potentialObstaclePoint = { point with X = point.X + 1 }
+            match map[pointToEvaluate.X, pointToEvaluate.Y] with
+            | Travelled { East = true } -> true
+            | _ -> false
+        else
+            false
+    | South ->
         let pointToEvaluate = { point with Y = point.Y + 1 }
 
         if pointToEvaluate.Y < sizeY then
-            if checkPathForTravelled South point then
-                newObstructions.Add(potentialObstaclePoint)
-            // match map[pointToEvaluate.X, pointToEvaluate.Y] with
-            // | Travelled { South = true } ->
-            //     newObstructions.Add(potentialObstaclePoint)
-            // | _ -> ()
-    | South ->
-        let potentialObstaclePoint = { point with Y = point.Y + 1 }
+            match map[pointToEvaluate.X, pointToEvaluate.Y] with
+            | Travelled { South = true } -> true
+            | _ -> false
+        else
+            false
+    | West ->
         let pointToEvaluate = { point with X = point.X - 1 }
 
         if pointToEvaluate.X >= 0 then
-            if checkPathForTravelled West point then
-                newObstructions.Add(potentialObstaclePoint)
-            // match map[pointToEvaluate.X, pointToEvaluate.Y] with
-            // | Travelled { West = true } ->
-            //     newObstructions.Add(potentialObstaclePoint)
-            // | _ -> ()
-    | West ->
-        let potentialObstaclePoint = { point with X = point.X - 1 }
-        let pointToEvaluate = { point with Y = point.Y - 1 }
+            match map[pointToEvaluate.X, pointToEvaluate.Y] with
+            | Travelled { West = true } -> true
+            | _ -> false
+        else
+            false
 
-        // if point = { X = 2; Y = 8 } then
-        //     printfn "(%d, %d) = %A" point.X point.Y (checkPathForTravelled North point)
-        //     printfn "(%d, %d)" pointToEvaluate.X pointToEvaluate.Y
-
-        if pointToEvaluate.Y >= 0 then
-            if checkPathForTravelled North point then
-                newObstructions.Add(potentialObstaclePoint)
-            // match map[pointToEvaluate.X, pointToEvaluate.Y] with
-            // | Travelled { North = true } ->
-            //     newObstructions.Add(potentialObstaclePoint)
-            // | _ -> ()
-
-let tick () =
+let tick (map: Entity array2d) =
     let (guard, guardPoint) = guardPosition
-
-    // printfn "%A at (%d, %d)" guard guardPoint.X guardPoint.Y
 
     match guard with
     | Guard ((Some North), travelledDirection) ->
@@ -256,101 +239,129 @@ let tick () =
         if newY = -1 then
             map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
             guardPosition <- (Guard (None, travelledDirection), guardPoint)
+            false
         else
             let newEntity = map[guardPoint.X, newY]
 
             match newEntity with
             | Obstacle ->
                 guardPosition <- (Guard ((Some East), newTravelled travelledDirection East), guardPoint)
+                false
             | EmptySpace ->
                 let newGuard = Guard ((Some North), newTravelled emptyTravelledDirection North)
-                checkPotentialNewObstacle North guardPoint
+
                 map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
                 map[guardPoint.X, newY] <- newGuard
                 guardPosition <- (newGuard, { X = guardPoint.X; Y = newY })
+                false
             | Travelled dir ->
                 let newGuard = Guard ((Some North), newTravelled dir North)
-                checkPotentialNewObstacle North guardPoint
-                map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
-                map[guardPoint.X, newY] <- newGuard
-                guardPosition <- (newGuard, { X = guardPoint.X; Y = newY })
-            | _ -> ()
+
+                if checkForLoop map North guardPoint then
+                    true
+                else
+                    map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
+                    map[guardPoint.X, newY] <- newGuard
+                    guardPosition <- (newGuard, { X = guardPoint.X; Y = newY })
+                    false
+            | _ -> false
     | Guard ((Some East), travelledDirection) ->
         let newX = guardPoint.X + 1
 
         if newX = sizeX then
             map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
             guardPosition <- (Guard (None, travelledDirection), guardPoint)
+            false
         else
             let newEntity = map[newX, guardPoint.Y]
 
             match newEntity with
             | Obstacle ->
                 guardPosition <- (Guard ((Some South), newTravelled travelledDirection South), guardPoint)
+                false
             | EmptySpace ->
                 let newGuard = Guard ((Some East), newTravelled emptyTravelledDirection East)
-                checkPotentialNewObstacle East guardPoint
+
                 map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
                 map[newX, guardPoint.Y] <- newGuard
                 guardPosition <- (newGuard, { X = newX; Y = guardPoint.Y })
+                false
             | Travelled dir ->
                 let newGuard = Guard ((Some East), newTravelled dir East)
-                checkPotentialNewObstacle East guardPoint
-                map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
-                map[newX, guardPoint.Y] <- newGuard
-                guardPosition <- (newGuard, { X = newX; Y = guardPoint.Y })
-            | _ -> ()
+
+                if checkForLoop map East guardPoint then
+                    true
+                else
+                    map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
+                    map[newX, guardPoint.Y] <- newGuard
+                    guardPosition <- (newGuard, { X = newX; Y = guardPoint.Y })
+                    false
+            | _ -> false
     | Guard ((Some South), travelledDirection) ->
         let newY = guardPoint.Y + 1
 
         if newY = sizeY then
             map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
             guardPosition <- (Guard (None, travelledDirection), guardPoint)
+            false
         else
             let newEntity = map[guardPoint.X, newY]
 
             match newEntity with
             | Obstacle ->
                 guardPosition <- (Guard ((Some West), newTravelled travelledDirection West), guardPoint)
+                false
             | EmptySpace ->
                 let newGuard = Guard ((Some South), newTravelled emptyTravelledDirection South)
-                checkPotentialNewObstacle South guardPoint
+
                 map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
                 map[guardPoint.X, newY] <- newGuard
                 guardPosition <- (newGuard, { X = guardPoint.X; Y = newY })
+                false
             | Travelled dir ->
                 let newGuard = Guard ((Some South), newTravelled dir South)
-                checkPotentialNewObstacle South guardPoint
-                map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
-                map[guardPoint.X, newY] <- newGuard
-                guardPosition <- (newGuard, { X = guardPoint.X; Y = newY })
-            | _ -> ()
+
+                if checkForLoop map South guardPoint then
+                    true
+                else
+                    map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
+                    map[guardPoint.X, newY] <- newGuard
+                    guardPosition <- (newGuard, { X = guardPoint.X; Y = newY })
+                    false
+            | _ -> false
     | Guard ((Some West), travelledDirection) ->
         let newX = guardPoint.X - 1
 
         if newX = -1 then
             map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
             guardPosition <- (Guard (None, travelledDirection), guardPoint)
+            false
         else
             let newEntity = map[newX, guardPoint.Y]
 
             match newEntity with
             | Obstacle ->
                 guardPosition <- (Guard ((Some North), newTravelled travelledDirection North), guardPoint)
+                false
             | EmptySpace ->
                 let newGuard = Guard ((Some West), newTravelled emptyTravelledDirection West)
-                checkPotentialNewObstacle West guardPoint
+
                 map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
                 map[newX, guardPoint.Y] <- newGuard
                 guardPosition <- (newGuard, { X = newX; Y = guardPoint.Y })
+                false
             | Travelled dir ->
                 let newGuard = Guard ((Some West), newTravelled dir West)
-                checkPotentialNewObstacle West guardPoint
-                map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
-                map[newX, guardPoint.Y] <- newGuard
-                guardPosition <- (newGuard, { X = newX; Y = guardPoint.Y })
-            | _ -> ()
-    | _ -> ()
+
+                if checkForLoop map West guardPoint then
+                    true
+                else
+                    map[guardPoint.X, guardPoint.Y] <- Travelled travelledDirection
+                    map[newX, guardPoint.Y] <- newGuard
+                    guardPosition <- (newGuard, { X = newX; Y = guardPoint.Y })
+                    false
+            | _ -> false
+    | _ -> false
 
 let infiniteSeq () =
     let rec innerSeq n =
@@ -361,33 +372,48 @@ let infiniteSeq () =
 
     innerSeq 1L
 
-let numSteps =
+let walkMap (thisMap: Entity array2d)  =
+    let mutable wasLoop = false
+
+    guardPosition <- startingGuardPosition
+
     infiniteSeq()
         |> Seq.takeWhile
             (fun i ->
-                //printfn "step %d" i
-                tick()
-                match fst guardPosition with
-                | Guard (None, _) -> false
+                let isLoop = tick thisMap
+
+                match (isLoop, fst guardPosition) with
+                | (true, _) ->
+                    wasLoop <- true
+                    false
+                | (_, Guard (None, _)) -> false
                 | _ -> true)
-        |> Seq.length
+        |> Seq.iter (fun _ -> ())
 
-printfn "%d steps" numSteps
+    wasLoop
 
-let mutable numTravelled = 0
+let initialMap = Array2D.copy startingMap
 
-map
-    |> Array2D.iter
-        (fun x ->
-            match x with
-            | Travelled _ -> numTravelled <- numTravelled + 1
-            | _ -> ())
+walkMap initialMap |> ignore
 
-printfn "%d" numTravelled
+let newObstacleCandidates =
+    initialMap
+        |> Array2D.mapi (fun x y entity -> (x, y, entity))
+        |> Seq.cast<(int * int * Entity)>
+        |> Seq.filter
+            (fun (x, y, entity) ->
+                match entity with
+                | Travelled _ -> (snd startingGuardPosition) <> { X = x; Y = y }
+                | _ -> false)
+        |> Seq.map (fun (x, y, _) -> { X = x; Y = y })
 
-printfn "%A" newObstructions.Count
+let newObstacles =
+    newObstacleCandidates
+        |> Seq.filter
+            (fun point ->
+                let newMap = Array2D.copy startingMap
 
-// answer of 435 is too low
+                newMap[point.X, point.Y] <- Obstacle
+                walkMap newMap)
 
-// try this: create a function to list out the Travelled directions and then compare it
-// to the small example with the directions worked out by hand
+printfn "%A" (newObstacles |> Seq.length)

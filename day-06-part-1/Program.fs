@@ -154,8 +154,6 @@ rawMap
 let tick () =
     let (guard, guardPoint) = guardPosition
 
-    // printfn "%A at (%d, %d)" guard guardPoint.X guardPoint.Y
-
     match guard with
     | Guard (Some North) ->
         let newY = guardPoint.Y - 1
@@ -219,12 +217,6 @@ let tick () =
                 guardPosition <- (guard, { X = newX; Y = guardPoint.Y })
     | _ -> ()
 
-// tick()
-// tick()
-
-
-// exit 0
-
 let infiniteSeq () =
     let rec innerSeq n =
         seq {
@@ -238,20 +230,14 @@ let numSteps =
     infiniteSeq()
         |> Seq.takeWhile
             (fun i ->
-                //printfn "step %d" i
                 tick()
-                (fst guardPosition) <> Guard None) |> Seq.length
+                (fst guardPosition) <> Guard None)
+        |> Seq.length
 
-printfn "%d steps" numSteps
+let numStuff =
+    map
+        |> Seq.cast<Entity>
+        |> Seq.filter (fun entity -> entity = Travelled)
+        |> Seq.length
 
-let mutable numTravelled = 0
-
-map
-    |> Array2D.iter
-        (fun x ->
-            if x = Travelled then
-                numTravelled <- numTravelled + 1
-            else
-                ())
-
-printfn "%d" numTravelled
+printfn "%d" numStuff
