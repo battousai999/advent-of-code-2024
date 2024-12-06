@@ -234,10 +234,10 @@ let numSteps =
                 (fst guardPosition) <> Guard None)
         |> Seq.length
 
-let numStuff =
+let numTravelled =
     map
         |> Seq.cast<Entity>
         |> Seq.filter (fun entity -> entity = Travelled)
         |> Seq.length
 
-printfn "%d" numStuff
+printfn "%d" numTravelled
