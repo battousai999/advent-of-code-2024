@@ -1,0 +1,88 @@
+﻿// The engineers seem concerned; the total calibration result you gave them is nowhere close to being within
+// safety tolerances. Just then, you spot your mistake: some well-hidden elephants are holding a third type of
+// operator.
+//
+// The concatenation operator (||) combines the digits from its left and right inputs into a single number. For
+// example, 12 || 345 would become 12345. All operators are still evaluated left-to-right.
+//
+// Now, apart from the three equations that could be made true using only addition and multiplication, the above
+// example has three more equations that can be made true by inserting operators:
+//
+// - 156: 15 6 can be made true through a single concatenation: 15 || 6 = 156.
+// - 7290: 6 8 6 15 can be made true using 6 * 8 || 6 * 15.
+// - 192: 17 8 14 can be made true using 17 || 8 + 14.
+//
+// Adding up all six test values (the three that could be made before using only + and * plus the new three that
+// can now be made by also using ||) produces the new total calibration result of 11387.
+//
+// Using your new knowledge of elephant hiding spots, determine which equations could possibly be true. What is
+// their total calibration result?
+
+open System
+open System.IO
+
+type Equation = {
+    Answer: int64
+    Terms: int64 list
+}
+
+let rawEquations = File.ReadAllLines "../day-07-part-1/input.txt"
+
+// let rawEquationsString = @"190: 10 19
+// 3267: 81 40 27
+// 83: 17 5
+// 156: 15 6
+// 7290: 6 8 6 15
+// 161011: 16 10 13
+// 192: 17 8 14
+// 21037: 9 7 18 13
+// 292: 11 6 16 20"
+
+// let rawEquations = rawEquationsString.Split(Environment.NewLine)
+
+let equations =
+    rawEquations
+        |> Array.map
+            (fun str ->
+                let parts = str.Split(':')
+                let answer = parts[0] |> int64
+                let listStr = parts[1]
+                let list = listStr.Split(' ', StringSplitOptions.RemoveEmptyEntries) |> Array.map int64 |> List.ofArray
+
+                { Answer = answer; Terms = list })
+
+let iteratedDivideBy dividend divisor times =
+    let rec innerDivide d n =
+        if n = 0 then
+            dividend
+        elif n = 1 then
+            d / divisor
+        else
+            innerDivide (d / divisor) (n - 1)
+
+    innerDivide dividend times
+
+let calcEquation (terms: int64 list) (encodedOperators: int) =
+    let operators =
+        [0..(List.length terms - 2)]
+            |> List.mapi (fun i n -> (iteratedDivideBy encodedOperators 3 n) % 3)
+    let firstTerm = List.head terms
+    let applyOperation ((x, i): int64 * int) n =
+        if operators[i] = 0 then
+            (x + n, i + 1)
+        elif operators[i] = 1 then
+            (x * n, i + 1)
+        else
+            (((string x) + (string n)) |> int64, i + 1)
+
+    terms |> List.skip 1 |> List.fold applyOperation (firstTerm, 0) |> fst
+
+let isEquationValid (equation: Equation) =
+    let operators = [0..((pown 3 ((List.length equation.Terms) - 1))-1)]
+
+    operators |> List.exists (fun op -> calcEquation equation.Terms op = equation.Answer)
+
+let validEquations = equations |> Array.filter isEquationValid
+let answer = validEquations |> Array.map (fun x -> x.Answer) |> Array.sum
+
+printfn "%A" answer
