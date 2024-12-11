@@ -4,7 +4,7 @@
 
 open System
 open System.IO
-open System.Collections.Generic
+open System.Collections.Concurrent
 
 type Tree =
     | Branch of Tree * Tree
@@ -12,48 +12,37 @@ type Tree =
 
 type TreeList = Tree list
 
-// let rawInitialStones = File.ReadAllText "./input.txt"
+let rawInitialStones = File.ReadAllText "../day-11-part-1/input.txt"
 
-let rawInitialStones = "1"
+// let rawInitialStones = "125 17"
 
-let initialStones = rawInitialStones.Split(' ') |> Array.map int64 |> List.ofArray
+let stonesList = rawInitialStones.Split(' ') |> Array.map int64 |> List.ofArray
 
-let stonesList = LinkedList<int64>(initialStones)
+let recursiveMemoize func =
+    let cache = ConcurrentDictionary()
 
-let iterateList (list: LinkedList<int64>) (f: LinkedList<int64> -> LinkedListNode<int64> option -> LinkedListNode<int64> option) =
-    let mutable node = Some list.First
+    let rec recursiveFunc x =
+        cache.GetOrAdd(x, lazy func recursiveFunc x).Value
 
-    while node.IsSome do
-        node <- f list node
+    recursiveFunc
 
-let transformStone (list: LinkedList<int64>) (stone: LinkedListNode<int64> option) =
-    match stone with
-    | None -> None
-    | Some null -> None
-    | Some node ->
-        if node.Value = 0 then
-            node.Value <- 1
-            Some node.Next
+// Note: needed to translate to the Y-combinator-associated form of my recursive function in order to memoize it more easily
+let countStones = recursiveMemoize <| (fun recursiveFunc ((iterations, stoneValue): (int * int64)) ->
+    if iterations = 0 then
+        1L
+    elif stoneValue = 0 then
+        recursiveFunc ((iterations - 1), 1L)
+    else
+        let valueStr = stoneValue.ToString()
+
+        if valueStr.Length % 2 = 0 then
+            let leftValue = valueStr[0..(valueStr.Length / 2)-1] |> int64
+            let rightValue = valueStr[valueStr.Length / 2..] |> int64
+
+            (recursiveFunc ((iterations - 1), leftValue)) + (recursiveFunc ((iterations - 1), rightValue))
         else
-            let valueStr = node.Value.ToString()
+            recursiveFunc ((iterations - 1), (stoneValue * 2024L)))
 
-            if valueStr.Length % 2 = 0 then
-                let leftValue = valueStr[0..(valueStr.Length / 2)-1] |> int64
-                let rightValue = valueStr[valueStr.Length / 2..] |> int64
-                let newNode = LinkedListNode<int64>(rightValue)
+let answer = stonesList |> List.sumBy (fun stone -> countStones (75, stone))
 
-                node.Value <- leftValue
-                list.AddAfter(node, newNode)
-                Some newNode.Next
-            else
-                node.Value <- node.Value * 2024L
-                Some node.Next
-
-let iterate n action =
-    Seq.init n (fun i -> i)
-        |> Seq.iter (fun i -> action(); printfn "%d" (i+1))
-
-// lol... can't brute force this one :)
-iterate 75 (fun () -> iterateList stonesList transformStone)
-
-printfn "%d" stonesList.Count
+printfn "%d" answer
