@@ -162,18 +162,9 @@ let regions =
 
                     [{ Name = ch; Points = points }])
 
-// regions |> Seq.iteri (fun i region -> printfn ">>> (%d) %A" i region) |> ignore
-
 let regionPerimeter region =
     let numAdjacentPoints point = allDirections |> List.choose (getPointInDirection point) |> List.filter (fun p -> map[p.X, p.Y] = region.Name) |> List.length
     region.Points |> List.sumBy (fun point -> 4 - (numAdjacentPoints point))
-
-// regions
-//     |> Seq.iter
-//         (fun region ->
-//             let area = region.Points |> List.length
-//             let perimeter = regionPerimeter region
-//             printfn "%c - %d x %d" region.Name area perimeter)
 
 let answer = regions |> Seq.sumBy (fun region -> (region.Points |> List.length) * (regionPerimeter region))
 

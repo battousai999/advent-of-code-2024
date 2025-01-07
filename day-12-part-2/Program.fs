@@ -73,20 +73,20 @@ type Region = {
     Points: Point list
 }
 
-// let rawMap = File.ReadAllLines "./input.txt"
+let rawMap = File.ReadAllLines "../day-12-part-1/input.txt"
 
-let rawMapStr = @"VRRRIICCFF
-RRRRIICCCF
-VVRRRCCFFF
-VVRCCCJFFF
-VVVVCJJCFE
-VVIVCCJJEE
-VVIIICJJEE
-MIIIIIJJEE
-MIIISIJEEE
-MMMISSJEEE"
+// let rawMapStr = @"RRRRIICCFF
+// RRRRIICCCF
+// VVRRRCCFFF
+// VVRCCCJFFF
+// VVVVCJJCFE
+// VVIVCCJJEE
+// VVIIICJJEE
+// MIIIIIJJEE
+// MIIISIJEEE
+// MMMISSJEEE"
 
-let rawMap = rawMapStr.Split(Environment.NewLine)
+// let rawMap = rawMapStr.Split(Environment.NewLine)
 
 let map = rawMap |> buildMap '.' identity
 
@@ -102,30 +102,6 @@ let getPointInDirection point direction =
     | West  when point.X > 0         -> Some { X = point.X - 1; Y = point.Y     }
     | East  when point.X < xSize - 1 -> Some { X = point.X + 1; Y = point.Y     }
     | _ -> None
-
-let getDirectionOfPoint sourcePoint destPoint =
-    let isEast = sourcePoint.X = destPoint.X + 1
-    let isWest = sourcePoint.X = destPoint.X - 1
-    let isNorth = sourcePoint.Y = destPoint.Y - 1
-    let isSouth = sourcePoint.Y = destPoint.Y + 1
-
-    match (isNorth, isEast, isSouth, isWest) with
-    | (true, false, false, false) -> North
-    | (false, true, false, false) -> East
-    | (false, false, true, false) -> South
-    | (false, false, false, true) -> West
-    | _ ->
-        let point1 = sprintf "%A" sourcePoint
-        let point2 = sprintf "%A" destPoint
-        raise <| InvalidOperationException($"Points not adjacent: Point1 = {point1}, Point2 = {point2}")
-
-let isOppositeDirection a b =
-    match (a, b) with
-    | North, South -> true
-    | South, North -> true
-    | East, West   -> true
-    | West, East   -> true
-    | _ -> false
 
 let getNonVisitedAdjacentPoints ch point =
     let rec innerGetPoints point currentPoints =
@@ -155,92 +131,51 @@ let regions =
 
                     [{ Name = ch; Points = points }])
 
-// regions |> Seq.iteri (fun i region -> printfn ">>> (%d) %A" i region) |> ignore
-
-let regionPerimeter region =
-    let numAdjacentPoints point = allDirections |> List.choose (getPointInDirection point) |> List.filter (fun p -> map[p.X, p.Y] = region.Name) |> List.length
-    region.Points |> List.sumBy (fun point -> 4 - (numAdjacentPoints point))
-
-let pathPointComparer a b =
-    let yDiff = a.Y - b.Y
-
-    if yDiff = 0 then a.X - b.X else yDiff
-
-// Dead end--this won't work due to missing inner "holes"
 let regionSides region =
     if region.Points.Length = 1 then
         4
-    elif region.Points.Length = 2 then
-        6
     else
-        let regionPointSet = HashSet(region.Points)
-        // * get clockwise boundary sequence
-        //   * start with left-most of top-most point
-        // * use prev-direction and current-direction to detect new "side"
-        //   * same direction -> no new side
-        //   * opposite direction -> 2 new sides
-        //   * 90 degree direction -> 1 new side
-        let clockwisePath =
-            let originPoint = region.Points |> List.sortWith pathPointComparer |> List.head
-            let rec buildPath point moveDirection currentPath isInitialPoint =
-                if point = originPoint && not isInitialPoint then
-                    currentPath
-                else
-                    let isRegionPoint direction =
-                        getPointInDirection point direction
-                            |> Option.filter (fun p -> regionPointSet.Contains p)
-                            |> Option.map (fun p -> (direction, p))
-                    let checkDirectionList =
-                        match moveDirection with
-                        | East  -> [North; East; South; West]
-                        | South -> [East; South; West; North]
-                        | West  -> [South; West; North; East]
-                        | North -> [West; North; East; South]
+        let rows = region.Points |> List.groupBy _.Y
+        let columns = region.Points |> List.groupBy _.X
+        let isNotInRegion point = region.Points |> List.contains point |> not
+        let horizontalSides =
+            rows
+                |> List.sumBy
+                    (fun (_, points) ->
+                        let topPoints = points |> List.filter (fun p -> getPointInDirection p North |> Option.map isNotInRegion |> Option.defaultValue true)
+                        let bottomPoints = points |> List.filter (fun p -> getPointInDirection p South |> Option.map isNotInRegion |> Option.defaultValue true)
+                        let countSides points =
+                            if List.isEmpty points then
+                                0
+                            else
+                                let orderedPoints = points |> List.sortBy _.X
+                                let pairs = orderedPoints |> List.map _.X |> List.pairwise
+                                let adjacentPairs = pairs |> List.filter (fun (a, b) -> abs (a - b) = 1)
 
-                    let (newDirection, nextPoint) = checkDirectionList |> List.choose isRegionPoint |> List.head
-                    buildPath nextPoint newDirection (point :: currentPath) false
+                                (List.length pairs) - (List.length adjacentPairs) + 1
 
-            buildPath originPoint East [] true |> List.rev |> Array.ofList
+                        (countSides topPoints) + (countSides bottomPoints))
+        let verticalSides =
+            columns
+                |> List.sumBy
+                    (fun (_, points) ->
+                        let leftPoints = points |> List.filter (fun p -> getPointInDirection p West |> Option.map isNotInRegion |> Option.defaultValue true)
+                        let rightPoints = points |> List.filter (fun p -> getPointInDirection p East |> Option.map isNotInRegion |> Option.defaultValue true)
 
-        // printfn "%A" clockwisePath
+                        let countSides points =
+                            if List.isEmpty points then
+                                0
+                            else
+                                let orderedPoints = points |> List.sortBy _.Y
+                                let pairs = orderedPoints |> List.map _.Y |> List.pairwise
+                                let adjacentPairs = pairs |> List.filter (fun (a, b) -> abs (a - b) = 1)
 
-        let clockwisePathLength = clockwisePath |> Array.length
+                                (List.length pairs) - (List.length adjacentPairs) + 1
 
-        let rec innerWalk index moveDirection currentSideCount =
-            let isFirstIndex = index = 0
-            let isLastIndex = index = clockwisePathLength - 1
-            let nextDirection = getDirectionOfPoint clockwisePath[index] clockwisePath[if isLastIndex then 0 else index+1]
-            let nextIndex = if isLastIndex then 0 else index + 1
-            let newSideCount =
-                if moveDirection = nextDirection then
-                    currentSideCount
-                elif isOppositeDirection moveDirection nextDirection then
-                    currentSideCount + 2
-                else
-                    currentSideCount + 1
+                        (countSides leftPoints) + (countSides rightPoints))
 
-            if isFirstIndex then
-                newSideCount
-            else
-                innerWalk nextIndex nextDirection newSideCount
+        horizontalSides + verticalSides
 
-        innerWalk 1 East 1
+let answer = regions |> Seq.sumBy (fun region -> (region.Points |> List.length) * (regionSides region))
 
-let temp = regions |> Seq.skip 1 |> Seq.head
-
-printfn "region = %A\n" temp
-
-let value = regionSides temp
-
-printfn "sides = %d" value
-
-// regions
-//     |> Seq.iter
-//         (fun region ->
-//             let area = region.Points |> List.length
-//             let perimeter = regionPerimeter region
-//             printfn "%c - %d x %d" region.Name area perimeter)
-
-// let answer = regions |> Seq.sumBy (fun region -> (region.Points |> List.length) * (regionPerimeter region))
-
-// printfn "%d" answer
+printfn "%d" answer
