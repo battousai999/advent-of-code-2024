@@ -51,6 +51,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "common", "common\common.fsp
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "day-12-part-1", "day-12-part-1\day-12-part-1.fsproj", "{864A8813-7BBF-4D0D-B2C4-E4860AB0C71F}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "day-12-part-2", "day-12-part-2\day-12-part-2.fsproj", "{DF1688E4-FACF-4080-9955-6538D9D9BBB6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -156,5 +158,9 @@ Global
 		{864A8813-7BBF-4D0D-B2C4-E4860AB0C71F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{864A8813-7BBF-4D0D-B2C4-E4860AB0C71F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{864A8813-7BBF-4D0D-B2C4-E4860AB0C71F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DF1688E4-FACF-4080-9955-6538D9D9BBB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DF1688E4-FACF-4080-9955-6538D9D9BBB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DF1688E4-FACF-4080-9955-6538D9D9BBB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DF1688E4-FACF-4080-9955-6538D9D9BBB6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

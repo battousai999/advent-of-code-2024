@@ -104,20 +104,20 @@ type Region = {
     Points: Point list
 }
 
-// let rawMap = File.ReadAllLines "./input.txt"
+let rawMap = File.ReadAllLines "./input.txt"
 
-let rawMapStr = @"RRRRIICCFF
-RRRRIICCCF
-VVRRRCCFFF
-VVRCCCJFFF
-VVVVCJJCFE
-VVIVCCJJEE
-VVIIICJJEE
-MIIIIIJJEE
-MIIISIJEEE
-MMMISSJEEE"
+// let rawMapStr = @"RRRRIICCFF
+// RRRRIICCCF
+// VVRRRCCFFF
+// VVRCCCJFFF
+// VVVVCJJCFE
+// VVIVCCJJEE
+// VVIIICJJEE
+// MIIIIIJJEE
+// MIIISIJEEE
+// MMMISSJEEE"
 
-let rawMap = rawMapStr.Split(Environment.NewLine)
+// let rawMap = rawMapStr.Split(Environment.NewLine)
 
 let map = rawMap |> buildMap '.' identity
 
