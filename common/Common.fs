@@ -1,5 +1,6 @@
 ﻿module Common
 
+open System
 open System.Text.RegularExpressions
 
 let (|Regexer|_|) (regex : Regex) input =
@@ -34,3 +35,17 @@ let toSeq<'a> (arr: 'a array2d) =
         for j in 0 .. length2-1 do
         yield arr[i,j]
     }
+
+let infiniteSeq () =
+    seq {
+        let mutable i = 0L
+
+        while true do
+            if i < Int64.MaxValue then
+                i <- i + 1L
+
+            yield i
+    }
+
+let isEven n = n % 2 = 0
+let isOdd n = n % 2 = 1

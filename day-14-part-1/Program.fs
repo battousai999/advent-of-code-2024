@@ -1,8 +1,11 @@
-﻿// One of The Historians needs to use the bathroom; fortunately, you know there's a bathroom near an unvisited location on their list, and so you're all quickly teleported directly to the lobby of Easter Bunny Headquarters.
+﻿// One of The Historians needs to use the bathroom; fortunately, you know there's a bathroom near an unvisited location on their list,
+// and so you're all quickly teleported directly to the lobby of Easter Bunny Headquarters.
 //
-// Unfortunately, EBHQ seems to have "improved" bathroom security again after your last visit. The area outside the bathroom is swarming with robots!
+// Unfortunately, EBHQ seems to have "improved" bathroom security again after your last visit. The area outside the bathroom is
+// swarming with robots!
 //
-// To get The Historian safely to the bathroom, you'll need a way to predict where the robots will be in the future. Fortunately, they all seem to be moving on the tile floor in predictable straight lines.
+// To get The Historian safely to the bathroom, you'll need a way to predict where the robots will be in the future. Fortunately,
+// they all seem to be moving on the tile floor in predictable straight lines.
 //
 // You make a list (your puzzle input) of all of the robots' current positions (p) and velocities (v), one robot per line. For example:
 //
@@ -19,13 +22,17 @@
 // p=2,4 v=2,-3
 // p=9,5 v=-3,-3
 //
-// Each robot's position is given as p=x,y where x represents the number of tiles the robot is from the left wall and y represents the number of tiles from the top wall (when viewed from above). So, a position of p=0,0 means the robot is all the way in the top-left corner.
+// Each robot's position is given as p=x,y where x represents the number of tiles the robot is from the left wall and y represents the
+// number of tiles from the top wall (when viewed from above). So, a position of p=0,0 means the robot is all the way in the top-left corner.
 //
-// Each robot's velocity is given as v=x,y where x and y are given in tiles per second. Positive x means the robot is moving to the right, and positive y means the robot is moving down. So, a velocity of v=1,-2 means that each second, the robot moves 1 tile to the right and 2 tiles up.
+// Each robot's velocity is given as v=x,y where x and y are given in tiles per second. Positive x means the robot is moving to the right,
+// and positive y means the robot is moving down. So, a velocity of v=1,-2 means that each second, the robot moves 1 tile to the right and 2 tiles up.
 //
-// The robots outside the actual bathroom are in a space which is 101 tiles wide and 103 tiles tall (when viewed from above). However, in this example, the robots are in a space which is only 11 tiles wide and 7 tiles tall.
+// The robots outside the actual bathroom are in a space which is 101 tiles wide and 103 tiles tall (when viewed from above). However, in this
+// example, the robots are in a space which is only 11 tiles wide and 7 tiles tall.
 //
-// The robots are good at navigating over/under each other (due to a combination of springs, extendable legs, and quadcopters), so they can share the same tile and don't interact with each other. Visually, the number of robots on each tile in this example looks like this:
+// The robots are good at navigating over/under each other (due to a combination of springs, extendable legs, and quadcopters), so they can
+// share the same tile and don't interact with each other. Visually, the number of robots on each tile in this example looks like this:
 //
 // 1.12.......
 // ...........
@@ -35,7 +42,8 @@
 // .........1.
 // .......1...
 //
-// These robots have a unique feature for maximum bathroom security: they can teleport. When a robot would run into an edge of the space they're in, they instead teleport to the other side, effectively wrapping around the edges. Here is what robot p=2,4 v=2,-3 does for the first few seconds:
+// These robots have a unique feature for maximum bathroom security: they can teleport. When a robot would run into an edge of the space they're
+// in, they instead teleport to the other side, effectively wrapping around the edges. Here is what robot p=2,4 v=2,-3 does for the first few seconds:
 //
 // Initial state:
 //
@@ -109,7 +117,8 @@
 // ...12......
 // .1....1....
 //
-// To determine the safest area, count the number of robots in each quadrant after 100 seconds. Robots that are exactly in the middle (horizontally or vertically) don't count as being in any quadrant, so the only relevant robots are:
+// To determine the safest area, count the number of robots in each quadrant after 100 seconds. Robots that are exactly in the middle (horizontally
+// or vertically) don't count as being in any quadrant, so the only relevant robots are:
 //
 // ..... 2..1.
 // ..... .....
@@ -121,9 +130,84 @@
 //
 // In this example, the quadrants contain 1, 3, 4, and 1 robot. Multiplying these together gives a total safety factor of 12.
 //
-// Predict the motion of the robots in your list within a space which is 101 tiles wide and 103 tiles tall. What will the safety factor be after exactly 100 seconds have elapsed?
+// Predict the motion of the robots in your list within a space which is 101 tiles wide and 103 tiles tall. What will the safety factor be
+// after exactly 100 seconds have elapsed?
 
 open System
 open System.IO
 open Common
+open System.Text.RegularExpressions
 
+type Vector = {
+    X: int
+    Y: int
+}
+
+type Robot = {
+    InitialPosition: Vector
+    Velocity: Vector
+}
+
+let maxX = 101 //11
+let maxY = 103 //7
+
+let robotRegex = Regex(@"^p=(\d+),(\d+)\sv=([\d-]+),([\d-]+)$")
+
+let rawRobots = File.ReadAllLines("./input.txt")
+
+// let rawRobotsStr = @"p=0,4 v=3,-3
+// p=6,3 v=-1,-3
+// p=10,3 v=-1,2
+// p=2,0 v=2,-1
+// p=0,0 v=1,3
+// p=3,0 v=-2,-2
+// p=7,6 v=-1,-3
+// p=3,0 v=-1,-2
+// p=9,3 v=2,3
+// p=7,3 v=-1,2
+// p=2,4 v=2,-3
+// p=9,5 v=-3,-3"
+
+// let rawRobots = rawRobotsStr.Split(Environment.NewLine)
+
+let robots =
+    rawRobots
+        |> Array.map
+            (fun line ->
+                match line with
+                | Regexer robotRegex [posX; posY; velX; velY] ->
+                    { InitialPosition = { X = int posX; Y = int posY }; Velocity = { X = int velX; Y = int velY }}
+                | _ -> raise <| ApplicationException($"Invalid input line: {line}"))
+        |> Seq.ofArray
+
+let simulate iterations robot =
+    let newX = (robot.InitialPosition.X + (iterations * robot.Velocity.X)) % maxX
+    let newY = (robot.InitialPosition.Y + (iterations * robot.Velocity.Y)) % maxY
+
+    {
+        X = if newX < 0 then newX + maxX else newX
+        Y = if newY < 0 then newY + maxY else newY
+    }
+
+let middleX = maxX / 2
+let middleY = maxY / 2
+
+let finalPositions = robots |> Seq.map (simulate 100)
+
+let getQuadrant position =
+    match (position.X, position.Y) with
+    | x, y when position.X < middleX && position.Y < middleY -> Some 1
+    | x, y when position.X > middleX && position.Y < middleY -> Some 2
+    | x, y when position.X > middleX && position.Y > middleY -> Some 3
+    | x, y when position.X < middleX && position.Y > middleY -> Some 4
+    | _ -> None
+
+let quadrantCounts =
+    finalPositions
+        |> Seq.choose getQuadrant
+        |> Seq.groupBy identity
+        |> Seq.map (fun (_, list) -> Seq.length list |> int64)
+
+let answer = quadrantCounts |> Seq.reduce ( * )
+
+printfn "%d" answer
