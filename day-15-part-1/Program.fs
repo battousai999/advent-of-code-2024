@@ -271,24 +271,131 @@
 
 open System
 open System.IO
+open Common
 
-// let rawInput = File.ReadAllText("./input.txt")
+type Point = {
+    X: int
+    Y: int
+}
 
-let rawInput = @"########
-#..O.O.#
-##@.O..#
-#...O..#
-#.#.O..#
-#...O..#
-#......#
-########
+type MapElement =
+    | Empty
+    | Wall
+    | Robot
+    | Box
 
-<^^>>>vv<v>>v<<"
+type Direction =
+    | North
+    | East
+    | South
+    | West
+
+let rawInput = File.ReadAllText("./input.txt")
+
+// let rawInput = @"##########
+// #..O..O.O#
+// #......O.#
+// #.OO..O.O#
+// #..O@..O.#
+// #O#..O...#
+// #O..O..O.#
+// #.OO.O.OO#
+// #....O...#
+// ##########
+
+// <vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^
+// vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v
+// ><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<
+// <<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^
+// ^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><
+// ^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^
+// >^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^
+// <><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>
+// ^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>
+// v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^"
 
 let splitInput = rawInput.Split(Environment.NewLine + Environment.NewLine)
 
-let rawMap = splitInput[0]
-let rawDirections = splitInput[1]
+let rawMap = splitInput[0].Split(Environment.NewLine)
+let rawDirections = splitInput[1].ReplaceLineEndings("")
 
-printfn "***\n%s\n***" rawMap
-printfn "***\n%s\n***" rawDirections
+let map =
+    rawMap
+    |> buildMap
+        Empty
+        (fun ch ->
+            match ch with
+            | '#' -> Wall
+            | '.' -> Empty
+            | '@' -> Robot
+            | 'O' -> Box
+            | _ -> raise <| ApplicationException($"Unexpected character in map: {ch}"))
+
+let findPositionInMap<'a> predicate (map: 'a array2d) =
+    map |> toSeqOfIndices |> Seq.tryPick (fun (x, y) -> if predicate map[x,y] then Some { X = x; Y = y } else None)
+
+let mutable robotPosition = map |> findPositionInMap (fun x -> x = Robot) |> Option.get
+
+let renderMap () = map |> Common.renderMap (fun x -> match x with | Wall -> '#' | Empty -> '.' | Robot -> '@' | Box -> 'O')
+
+let directions =
+    rawDirections
+    |> toChars
+    |> Seq.map
+        (fun ch ->
+            match ch with
+            | '^' -> North
+            | '>' -> East
+            | 'v' -> South
+            | '<' -> West
+            | _ -> raise <| ApplicationException($"Unexpeted character in directions: {ch}"))
+
+let getPositionInDirection direction position =
+    match direction with
+    | North -> { X = position.X;     Y = position.Y - 1 }
+    | East  -> { X = position.X + 1; Y = position.Y     }
+    | South -> { X = position.X;     Y = position.Y + 1 }
+    | West  -> { X = position.X - 1; Y = position.Y     }
+
+let moveRobot (map: MapElement array2d) direction =
+    let rec moveTo position element =
+        let destElement = map[position.X, position.Y]
+
+        match destElement with
+        | Wall ->
+            false
+        | Empty ->
+            map[position.X, position.Y] <- element
+            true
+        | Robot ->
+            raise <| ApplicationException($"There can be only one robot")
+        | Box ->
+            let newPosition = getPositionInDirection direction position
+
+            if moveTo newPosition Box then
+                map[position.X, position.Y] <- element
+                true
+            else
+                false
+
+    let startingPosition = robotPosition
+    let newPosition = getPositionInDirection direction robotPosition
+
+    if moveTo newPosition Robot then
+        map[startingPosition.X, startingPosition.Y] <- Empty
+        robotPosition <- newPosition
+
+directions
+|> Seq.iter (moveRobot map)
+
+renderMap()
+
+let getGpsCoordinate x y = (y * 100) + x
+
+let totalCoordinates =
+    map
+    |> Array2D.mapi (fun x y element -> if element = Box then getGpsCoordinate x y else 0)
+    |> toSeq
+    |> Seq.sum
+
+printfn "%d" totalCoordinates
