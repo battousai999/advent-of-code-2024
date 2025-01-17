@@ -259,10 +259,11 @@ let map =
             | ']' -> BoxRight
             | _ -> raise <| ApplicationException($"Unexpected character in map: {ch}"))
 
-let findPositionInMap<'a> predicate (map: 'a array2d) =
-    map |> toSeqOfIndices |> Seq.tryPick (fun (x, y) -> if predicate map[x,y] then Some { X = x; Y = y } else None)
-
-let mutable robotPosition = map |> findPositionInMap (fun x -> x = Robot) |> Option.get
+let mutable robotPosition =
+    map
+    |> findPositionInMap (fun x -> x = Robot)
+    |> Option.map (fun (x, y) -> { X = x; Y = y })
+    |> Option.get
 
 let renderMap () =
     map

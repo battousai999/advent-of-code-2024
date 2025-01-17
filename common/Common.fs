@@ -90,3 +90,6 @@ let toChars (str: string) =
         for i in 0..str.Length-1 do
             yield str[i]
     }
+
+let findPositionInMap<'a> predicate (map: 'a array2d) =
+    map |> toSeqOfIndices |> Seq.tryPick (fun (x, y) -> if predicate map[x,y] then Some (x, y) else None)
