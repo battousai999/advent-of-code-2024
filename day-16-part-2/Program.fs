@@ -172,73 +172,103 @@ let graph = translateMapToGraph map
 let startVertex = graph.Vertices |> List.find (fun v -> v.Data = startMapPosition)
 let endVertex = graph.Vertices |> List.find (fun v -> v.Data = endMapPosition)
 
+type DirectedVertex = {
+    Vertex: Vertex<Point>
+    Direction: Direction
+}
 
-let modifiedDijkstra<'a when 'a: equality>
-    (graph: Graph<'a>)
-    (source: Vertex<'a>)
-    (target: Vertex<'a>)
-    (weightFunction: (Edge<'a> -> Dictionary<Vertex<'a>, int> -> Dictionary<Vertex<'a>, ResizeArray<Vertex<'a>>> -> int) option) =  // edge -> distanceMap -> prevMap -> calculatedWeightValue
-    let distanceMap = Dictionary<Vertex<'a>, int>()
-    let prevMap = Dictionary<Vertex<'a>, ResizeArray<Vertex<'a>>>()
-    let queue = PriorityQueue<Vertex<'a> * Vertex<'a> option, int>()
+type State = {
+    Cost: int
+    DirectedVertex: DirectedVertex
+}
 
-    distanceMap[source] <- 0
+let getOppositeDirection direction =
+    match direction with
+    | North -> South
+    | South -> North
+    | East  -> West
+    | West  -> East
 
-    graph.Vertices
-    |> List.filter (fun v -> v <> source)
-    |> List.iter (fun v -> distanceMap[v] <- (Int32.MaxValue - 2000))
-
-    queue.Enqueue((source, None), 0)
-
-    let mutable foundDistance = None
-
-    while queue.Count > 0 do
-        let current, from = queue.Dequeue()
-        let isFound = Option.isSome foundDistance
-
-        if current = target then
-            if not isFound then
-                foundDistance <- Some distanceMap[current]
-        elif not isFound || distanceMap[current] <= Option.get foundDistance then
-            let neighbors = getNeighbors current graph.Edges |> List.filter (fun e -> from |> Option.map (fun x -> x <> e.Dest) |> Option.defaultValue true)
-
-            // printfn ">>> current: %A, neighbors: %A" current neighbors
-
-            neighbors
-            |> List.iter
-                (fun edge ->
-                    let projection = weightFunction |> Option.defaultValue (fun e dm _ -> dm[e.Source] + e.Weight)
-                    let alternate = projection edge distanceMap prevMap // distanceMap[current] + edge.Weight
-
-                    printfn ">>> at (%A) from (%A) alternate: %d, distanceMap[edge.Dest]: %d" edge.Dest.Data edge.Source.Data alternate distanceMap[edge.Dest]
-
-                    let oldDistance = distanceMap[edge.Dest]
-                    let isLessOrEqual = alternate <= oldDistance + 1000
-                    let isEqual = alternate = (oldDistance - 1000) || alternate = oldDistance || alternate = (oldDistance + 1000)
-
-                    if isLessOrEqual then
-                        distanceMap[edge.Dest] <- alternate
-
-                        if isEqual && prevMap.ContainsKey(edge.Dest) then
-                            printfn ">>> >>> equals at %A" edge.Dest
-                            prevMap[edge.Dest].Add(current)
-                        else
-                            prevMap[edge.Dest] <- ResizeArray([current])
-
-                        let containsDest = queue.UnorderedItems |> Seq.exists (fun (((v, _), _): struct((Vertex<'a> * Vertex<'a> option) * int)) -> v = edge.Dest)
-
-                        if not containsDest then
-                            queue.Enqueue((edge.Dest, Some current), alternate))
-
-    prevMap
+let getPointInDirection direction position =
+    match direction with
+    | North -> { X = position.X; Y = position.Y - 1 }
+    | South -> { X = position.X; Y = position.Y + 1 }
+    | East  -> { X = position.X + 1; Y = position.Y }
+    | West  -> { X = position.X - 1; Y = position.Y }
 
 let getDirection a b =
     match a, b with
-    | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 && y1 = y2 - 1 -> North
-    | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 && y1 = y2 + 1 -> South
+    | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 && y1 = y2 + 1 -> North
+    | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 && y1 = y2 - 1 -> South
     | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 - 1 && y1 = y2 -> East
     | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 + 1 && y1 = y2 -> West
     | _ -> raise <| ApplicationException($"Non-adjacent points: ({a.X}, {a.Y}) and ({b.X}, {b.Y})")
+
+let getEdgeDirection edge =
+
+    match edge.Source.Data, edge.Dest.Data with
+    | { X = x1; Y = y1 }, { X = x2; Y = y2} when x1 = x2 && y1 = y2 + 1 -> North
+    | { X = x1; Y = y1 }, { X = x2; Y = y2} when x1 = x2 && y1 = y2 - 1 -> South
+    | { X = x1; Y = y1 }, { X = x2; Y = y2} when x1 = x2 - 1 && y1 = y2 -> East
+    | { X = x1; Y = y1 }, { X = x2; Y = y2} when x1 = x2 + 1 && y1 = y2 -> West
+    | _ -> raise <| ApplicationException($"Invalid non-adjacent edge: ({edge.Source.Data.X}, {edge.Source.Data.Y}), ({edge.Dest.Data.X}, {edge.Dest.Data.Y})")
+
+let dijkstra
+    (graph: Graph<Point>)
+    (source: Vertex<Point>)
+    (target: Vertex<Point>) =
+    let distanceMap = Dictionary<DirectedVertex, int>()
+    let prevMap = Dictionary<DirectedVertex, ResizeArray<DirectedVertex>>()
+    let queue = PriorityQueue<State, int>()
+    let finalStates = HashSet()
+    let getDistance dv = if distanceMap.ContainsKey(dv) then distanceMap[dv] else Int32.MaxValue
+
+    distanceMap[{ Vertex = source; Direction = East }] <- 0
+
+    queue.Enqueue({ Cost = 0; DirectedVertex = { Vertex = source; Direction = East } }, 0)
+
+    let mutable lowestCost = Int32.MaxValue
+    let mutable isDone = false
+
+    while queue.Count > 0 && not isDone do
+        let state = queue.Dequeue()
+
+        if state.Cost <= getDistance state.DirectedVertex then
+            let isAtEnd = state.DirectedVertex.Vertex = target
+
+            if isAtEnd && state.Cost <= lowestCost then
+                lowestCost <- state.Cost
+                finalStates.Add(state.DirectedVertex) |> ignore
+            elif not isAtEnd then
+                let neighbors =
+                    getNeighbors state.DirectedVertex.Vertex graph.Edges
+                    |> List.filter
+                        (fun e ->
+                            let oppositeDirection = getOppositeDirection state.DirectedVertex.Direction
+                            let fromPoint = getPointInDirection oppositeDirection state.DirectedVertex.Vertex.Data
+
+                            e.Dest.Data <> fromPoint)
+
+                neighbors
+                |> List.iter
+                    (fun edge ->
+                        let edgeDirection = getEdgeDirection edge
+                        let newDirectedVertex = { Vertex = edge.Dest; Direction = edgeDirection }
+                        let newCost = state.Cost + (if edgeDirection = state.DirectedVertex.Direction then 1 else 1000)
+                        let lowestDistance = getDistance newDirectedVertex
+
+                        if newCost <= lowestDistance then
+                            if newCost < lowestDistance then
+                                prevMap[newDirectedVertex] <- ResizeArray([state.DirectedVertex])
+                                distanceMap[newDirectedVertex] <-newCost
+                            elif newCost = lowestDistance then
+                                prevMap[newDirectedVertex].Add(state.DirectedVertex)
+
+                            queue.Enqueue({ Cost = newCost; DirectedVertex = newDirectedVertex }, newCost))
+
+    let newPrevMap = Dictionary(prevMap |> Seq.map (fun kvp -> KeyValuePair(kvp.Key, kvp.Value |> Seq.toList)))
+
+    (finalStates, newPrevMap, lowestCost)
 
 let directionIsOpposite dir1 dir2 =
     match dir1, dir2 with
@@ -313,7 +343,7 @@ let weightFunction edge prevMap =
 
     (path.Length - 1) + (numDirectionChanges * 1000)
 
-let results = modifiedDijkstra graph startVertex endVertex (Some (fun e _ pm -> weightFunction e pm))
+let (finalStates, prevMap, cost) = dijkstra graph startVertex endVertex
 
 // printfn "\n\nresults:\n%A" (Seq.toList results.DistanceMap |> List.filter (fun x -> x.Value < Int32.MaxValue))
 // printfn "\n\npath:\n%A" (getShortestPath startVertex endVertex results.PrevMap)
@@ -324,6 +354,6 @@ let caluculateCost (graph: Graph<Point>) (endVertex: Vertex<Point>) (prevMap: Di
 
     weightFunction edge prevMap
 
-printfn "\n\ncost = %d" (caluculateCost graph endVertex results)
+printfn "\n\ncost = %d" cost
 
-renderMap map (getAllShortestPathVertices startVertex endVertex results)
+printfn "\n\nfinalStates = %A\nprevMap = %A" finalStates (prevMap |> Seq.toList)
