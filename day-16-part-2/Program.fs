@@ -76,27 +76,27 @@ type Step = {
     Direction: Direction
 }
 
-// let rawMap = File.ReadAllLines("../day-16-part-1/input.txt")
+let rawMap = File.ReadAllLines("../day-16-part-1/input.txt")
 
-let rawMapStr = @"#################
-#...#...#...#..E#
-#.#.#.#.#.#.#.#.#
-#.#.#.#...#...#.#
-#.#.#.#.###.#.#.#
-#...#.#.#.....#.#
-#.#.#.#.#.#####.#
-#.#...#.#.#.....#
-#.#.#####.#.###.#
-#.#.#.......#...#
-#.#.###.#####.###
-#.#.#...#.....#.#
-#.#.#.#####.###.#
-#.#.#.........#.#
-#.#.#.#########.#
-#S#.............#
-#################"
+// let rawMapStr = @"#################
+// #...#...#...#..E#
+// #.#.#.#.#.#.#.#.#
+// #.#.#.#...#...#.#
+// #.#.#.#.###.#.#.#
+// #...#.#.#.....#.#
+// #.#.#.#.#.#####.#
+// #.#...#.#.#.....#
+// #.#.#####.#.###.#
+// #.#.#.......#...#
+// #.#.###.#####.###
+// #.#.#...#.....#.#
+// #.#.#.#####.###.#
+// #.#.#.........#.#
+// #.#.#.#########.#
+// #S#.............#
+// #################"
 
-let rawMap = rawMapStr.Split(Environment.NewLine)
+// let rawMap = rawMapStr.Split(Environment.NewLine)
 
 let map =
     buildMap
@@ -254,7 +254,7 @@ let dijkstra
                     (fun edge ->
                         let edgeDirection = getEdgeDirection edge
                         let newDirectedVertex = { Vertex = edge.Dest; Direction = edgeDirection }
-                        let newCost = state.Cost + (if edgeDirection = state.DirectedVertex.Direction then 1 else 1000)
+                        let newCost = state.Cost + (if edgeDirection = state.DirectedVertex.Direction then 1 else 1001)
                         let lowestDistance = getDistance newDirectedVertex
 
                         if newCost <= lowestDistance then
@@ -356,4 +356,35 @@ let caluculateCost (graph: Graph<Point>) (endVertex: Vertex<Point>) (prevMap: Di
 
 printfn "\n\ncost = %d" cost
 
-printfn "\n\nfinalStates = %A\nprevMap = %A" finalStates (prevMap |> Seq.toList)
+// printfn "\n\nfinalStates = %A\nprevMap = %A" finalStates (prevMap |> Seq.toList)
+
+let calculateTotalPositionsInPaths (finalStates: HashSet<DirectedVertex>) (prevMap: Dictionary<DirectedVertex,list<DirectedVertex>>) =
+    let positionsInPaths = HashSet(finalStates)
+    let states = Queue(finalStates)
+    //let branches = prevMap.Values |> Seq.sumBy (fun l -> if (List.length l) > 1 then 1 else 0)
+
+    //printfn "\n\nbranches = %d" branches
+
+    while states.Count > 0 do
+        let vertex = states.Dequeue()
+        let prevVertices = if prevMap.ContainsKey(vertex) then prevMap[vertex] else []
+
+        prevVertices
+        |> List.iter
+            (fun prevVertex ->
+                if not <| positionsInPaths.Contains(prevVertex) then
+                    positionsInPaths.Add(prevVertex) |> ignore
+                    states.Enqueue(prevVertex))
+
+    let branches =
+        positionsInPaths
+        |> Seq.map _.Vertex
+        |> Seq.countBy identity
+        |> Seq.filter (fun (_, length) -> length > 1)
+        |> Seq.length
+
+    printfn "\n\nbranches = %d" branches
+
+    positionsInPaths.Count - branches
+
+printfn "\n\npositions = %d" (calculateTotalPositionsInPaths finalStates prevMap)
