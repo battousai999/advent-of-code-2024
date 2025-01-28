@@ -167,8 +167,6 @@ let translateMapToGraph map =
 
 let graph = translateMapToGraph map
 
-// printfn "\nstart: (%d,%d), end: (%d,%d)" startMapPosition.X startMapPosition.Y endMapPosition.X endMapPosition.Y
-
 let startVertex = graph.Vertices |> List.find (fun v -> v.Data = startMapPosition)
 let endVertex = graph.Vertices |> List.find (fun v -> v.Data = endMapPosition)
 
@@ -196,14 +194,6 @@ let getPointInDirection direction position =
     | East  -> { X = position.X + 1; Y = position.Y }
     | West  -> { X = position.X - 1; Y = position.Y }
 
-let getDirection a b =
-    match a, b with
-    | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 && y1 = y2 + 1 -> North
-    | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 && y1 = y2 - 1 -> South
-    | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 - 1 && y1 = y2 -> East
-    | { X = x1; Y = y1 }, { X = x2; Y = y2 } when x1 = x2 + 1 && y1 = y2 -> West
-    | _ -> raise <| ApplicationException($"Non-adjacent points: ({a.X}, {a.Y}) and ({b.X}, {b.Y})")
-
 let getEdgeDirection edge =
 
     match edge.Source.Data, edge.Dest.Data with
@@ -213,6 +203,7 @@ let getEdgeDirection edge =
     | { X = x1; Y = y1 }, { X = x2; Y = y2} when x1 = x2 + 1 && y1 = y2 -> West
     | _ -> raise <| ApplicationException($"Invalid non-adjacent edge: ({edge.Source.Data.X}, {edge.Source.Data.Y}), ({edge.Dest.Data.X}, {edge.Dest.Data.Y})")
 
+// Modified from Common.dijkstra to keep multiple, same-cost paths in the prevMap
 let dijkstra
     (graph: Graph<Point>)
     (source: Vertex<Point>)
@@ -270,100 +261,11 @@ let dijkstra
 
     (finalStates, newPrevMap, lowestCost)
 
-let directionIsOpposite dir1 dir2 =
-    match dir1, dir2 with
-    | North, South
-    | South, North
-    | East, West
-    | West, East -> true
-    | _ -> false
-
-let modifiedGetShortestPath<'a when 'a: equality> (source: Vertex<'a>) (target: Vertex<'a>) (leadingEdge: Edge<'a>) (prevMap: Dictionary<Vertex<'a>, ResizeArray<Vertex<'a>>>) =
-    let mutable path = []
-
-    if prevMap.ContainsKey(target) || target = source then
-        let mutable current = Some target
-
-        while Option.isSome current do
-            path <- (Option.get current) :: path
-
-            let newCurrent =
-                if prevMap.ContainsKey(Option.get current) then
-                    let prevs = prevMap[Option.get current]
-                    let prev =
-                        prevs
-                        |> Seq.tryFind (fun v -> Option.get current = leadingEdge.Dest && v = leadingEdge.Source)
-                        |> Option.defaultValue prevs[0]
-                    Some prev
-                else
-                    None
-
-            current <- newCurrent
-
-    path
-
-let getAllShortestPathVertices<'a when 'a: equality> (source: Vertex<'a>) (target: Vertex<'a>) (prevMap: Dictionary<Vertex<'a>, ResizeArray<Vertex<'a>>>) =
-    let mutable vertices = HashSet()
-
-    if prevMap.ContainsKey(target) || target = source then
-        let todo = HashSet([target])
-
-        while todo.Count > 0 do
-            let current = todo |> Seq.head
-
-            todo.Remove(current) |> ignore
-            vertices.Add(current) |> ignore
-
-            if prevMap.ContainsKey(current) then
-                // printfn ">>> %d" prevMap[current].Count
-
-                prevMap[current] |> Seq.iter (fun v -> todo.Add(v) |> ignore)
-
-    vertices |> List.ofSeq
-
-let weightFunction edge prevMap =
-    let path =
-        modifiedGetShortestPath startVertex edge.Source edge prevMap
-        |> (fun l -> List.append l [edge.Dest])
-        |> List.map _.Data
-
-    // printfn ">>> path = %A" path
-
-    let directionPath =
-        path
-        |> List.pairwise
-        |> List.map (fun x -> x ||> getDirection)
-        |> List.append [East]
-
-    let numDirectionChanges =
-        directionPath
-        |> List.pairwise
-        |> List.map (fun (a, b) -> if a = b then 0 elif directionIsOpposite a b then 10000 else 1)
-        |> List.sum
-
-    (path.Length - 1) + (numDirectionChanges * 1000)
-
-let (finalStates, prevMap, cost) = dijkstra graph startVertex endVertex
-
-// printfn "\n\nresults:\n%A" (Seq.toList results.DistanceMap |> List.filter (fun x -> x.Value < Int32.MaxValue))
-// printfn "\n\npath:\n%A" (getShortestPath startVertex endVertex results.PrevMap)
-
-let caluculateCost (graph: Graph<Point>) (endVertex: Vertex<Point>) (prevMap: Dictionary<Vertex<Point>,ResizeArray<Vertex<Point>>>) =
-    let prevForEndVertex = prevMap[endVertex].[0]
-    let edge = graph.Edges |> List.find (fun edge -> edge.Source = prevForEndVertex && edge.Dest = endVertex)
-
-    weightFunction edge prevMap
-
-printfn "\n\ncost = %d" cost
-
-// printfn "\n\nfinalStates = %A\nprevMap = %A" finalStates (prevMap |> Seq.toList)
+let (finalStates, prevMap, _) = dijkstra graph startVertex endVertex
 
 let calculateTotalPositionsInPaths (finalStates: HashSet<DirectedVertex>) (prevMap: Dictionary<DirectedVertex,list<DirectedVertex>>) =
     let positionsInPaths = HashSet(finalStates)
     let states = Queue(finalStates)
-    //let branches = prevMap.Values |> Seq.sumBy (fun l -> if (List.length l) > 1 then 1 else 0)
-
-    //printfn "\n\nbranches = %d" branches
 
     while states.Count > 0 do
         let vertex = states.Dequeue()
@@ -382,8 +284,6 @@ let calculateTotalPositionsInPaths (finalStates: HashSet<DirectedVertex>) (prevM
         |> Seq.countBy identity
         |> Seq.filter (fun (_, length) -> length > 1)
         |> Seq.length
-
-    printfn "\n\nbranches = %d" branches
 
     positionsInPaths.Count - branches
 

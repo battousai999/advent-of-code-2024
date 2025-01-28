@@ -219,59 +219,8 @@ let translateMapToGraph map =
 
 let graph = translateMapToGraph map
 
-// printfn "\nstart: (%d,%d), end: (%d,%d)" startMapPosition.X startMapPosition.Y endMapPosition.X endMapPosition.Y
-
 let startVertex = graph.Vertices |> List.find (fun v -> v.Data = startMapPosition)
 let endVertex = graph.Vertices |> List.find (fun v -> v.Data = endMapPosition)
-
-
-let dijkstra<'a when 'a: equality>
-    (graph: Graph<'a>)
-    (source: Vertex<'a>)
-    (target: Vertex<'a>)
-    (weightFunction: (Edge<'a> -> Dictionary<Vertex<'a>, int> -> Dictionary<Vertex<'a>, Vertex<'a>> -> int) option) =  // edge -> distanceMap -> prevMap -> calculatedWeightValue
-    let distanceMap = Dictionary<Vertex<'a>, int>()
-    let prevMap = Dictionary<Vertex<'a>, Vertex<'a>>()
-    let queue = PriorityQueue<Vertex<'a>, int>()
-
-    distanceMap[source] <- 0
-
-    graph.Vertices
-    |> List.filter (fun v -> v <> source)
-    |> List.iter (fun v -> distanceMap[v] <- Int32.MaxValue)
-
-    queue.Enqueue(source, 0)
-
-    let mutable isFound = false
-
-    while queue.Count > 0 && not isFound do
-        let current = queue.Dequeue()
-
-        if current = target then
-            isFound <- true
-        else
-            let neighbors = getNeighbors current graph.Edges
-
-            // printfn ">>> current: %A, neighbors: %A" current neighbors
-
-            neighbors
-            |> List.iter
-                (fun edge ->
-                    let projection = weightFunction |> Option.defaultValue (fun e dm _ -> dm[e.Source] + e.Weight)
-                    let alternate = projection edge distanceMap prevMap // distanceMap[current] + edge.Weight
-
-                    // printfn ">>> >>> alternate: %d, distanceMap[edge.Dest]: %d" alternate distanceMap[edge.Dest]
-
-                    if alternate < distanceMap[edge.Dest] then
-                        distanceMap[edge.Dest] <- alternate
-                        prevMap[edge.Dest] <- current
-
-                        let containsDest = queue.UnorderedItems |> Seq.exists (fun ((v, _): struct(Vertex<'a> * int)) -> v = edge.Dest)
-
-                        if not containsDest then
-                            queue.Enqueue(edge.Dest, alternate))
-
-    { DistanceMap = distanceMap; PrevMap = prevMap }
 
 let getDirection a b =
     match a, b with
@@ -282,19 +231,20 @@ let getDirection a b =
     | _ -> raise <| ApplicationException($"Non-adjacent points: ({a.X}, {a.Y}) and ({b.X}, {b.Y})")
 
 let weightFunction edge prevMap =
+    // Find shortest path from start to edge
     let path =
         getShortestPath startVertex edge.Source prevMap
         |> (fun l -> List.append l [edge.Dest])
         |> List.map _.Data
 
-    // printfn ">>> path = %A" path
-
+    // Convert into a list of directions
     let directionPath =
         path
         |> List.pairwise
         |> List.map (fun x -> x ||> getDirection)
         |> List.append [East]
 
+    // Count the number of changes of direction
     let numDirectionChanges =
         directionPath
         |> List.pairwise
@@ -304,9 +254,6 @@ let weightFunction edge prevMap =
     (path.Length - 1) + (numDirectionChanges * 1000)
 
 let results = dijkstra graph startVertex endVertex (Some (fun e _ pm -> weightFunction e pm))
-
-// printfn "\n\nresults:\n%A" (Seq.toList results.DistanceMap |> List.filter (fun x -> x.Value < Int32.MaxValue))
-// printfn "\n\npath:\n%A" (getShortestPath startVertex endVertex results.PrevMap)
 
 let caluculateCost (graph: Graph<Point>) (endVertex: Vertex<Point>) (prevMap: Dictionary<Vertex<Point>,Vertex<Point>>) =
     let prevForEndVertex = prevMap[endVertex]

@@ -186,7 +186,7 @@ let dijkstra<'a when 'a: equality>
     (graph: Graph<'a>)
     (source: Vertex<'a>)
     (target: Vertex<'a>)
-    (weightFunction: (Edge<'a> -> Dictionary<Vertex<'a>, int> -> Dictionary<Vertex<'a>, Vertex<'a>> -> int)) =
+    (weightFunction: (Edge<'a> -> Dictionary<Vertex<'a>, int> -> Dictionary<Vertex<'a>, Vertex<'a>> -> int) option) =  // edge -> distanceMap -> prevMap -> calculatedWeightValue
     let distanceMap = Dictionary<Vertex<'a>, int>()
     let prevMap = Dictionary<Vertex<'a>, Vertex<'a>>()
     let queue = PriorityQueue<Vertex<'a>, int>()
@@ -212,7 +212,8 @@ let dijkstra<'a when 'a: equality>
             neighbors
             |> List.iter
                 (fun edge ->
-                    let alternate = distanceMap[current] + edge.Weight
+                    let projection = weightFunction |> Option.defaultValue (fun e dm _ -> dm[e.Source] + e.Weight)
+                    let alternate = projection edge distanceMap prevMap // distanceMap[current] + edge.Weight
 
                     if alternate < distanceMap[edge.Dest] then
                         distanceMap[edge.Dest] <- alternate
