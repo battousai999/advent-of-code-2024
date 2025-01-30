@@ -41,9 +41,9 @@ type Instruction = {
 }
 
 type Registers = {
-    A: int
-    B: int
-    C: int
+    A: int64
+    B: int64
+    C: int64
 }
 
 type ExecutionContext = {
@@ -102,16 +102,16 @@ let executeOpcode registers instruction =
     let combo operand =
         match operand with
         | x when x >= 0 && x <= 3 -> x
-        | 4 -> registers.A
-        | 5 -> registers.B
-        | 6 -> registers.C
+        | 4 -> int registers.A
+        | 5 -> int registers.B
+        | 6 -> int registers.C
         | _ ->
             let formattedInstruction = sprintf "%A" instruction
             raise <| ApplicationException($"Invalid combo operand ({operand}) in instruction: {formattedInstruction}")
 
     match instruction.Opcode with
     | Opcode.Adv ->
-        let newA = registers.A / (pown 2 (combo instruction.Operand)) // may need to use something more efficient that pown later on
+        let newA = registers.A / (int64 (pown 2 (combo instruction.Operand))) // may need to use something more efficient that pown later on
         ({ registers with A = newA }, None, None)
     | Opcode.Bxl ->
         let newB = registers.B ^^^ instruction.Operand
@@ -129,10 +129,10 @@ let executeOpcode registers instruction =
         let output = (combo instruction.Operand) % 8
         (registers, Some output, None)
     | Opcode.Bdv ->
-        let newB = registers.A / (pown 2 (combo instruction.Operand)) // may need to use something more efficient that pown later on
+        let newB = registers.A / (int64 (pown 2 (combo instruction.Operand))) // may need to use something more efficient that pown later on
         ({ registers with B = newB }, None, None)
     | Opcode.Cdv ->
-        let newC = registers.A / (pown 2 (combo instruction.Operand)) // may need to use something more efficient that pown later on
+        let newC = registers.A / (int64 (pown 2 (combo instruction.Operand))) // may need to use something more efficient that pown later on
         ({ registers with C = newC }, None, None)
     | _ -> raise <| ApplicationException($"Invalid instruction opcode: {instruction.Opcode}")
 
@@ -161,50 +161,55 @@ let executeProgram registers program requiredOutput =
 
     (output |> List.rev, context.Registers)
 
-let findLowestRegisterA program rawProgram startA endA=
-    let mutable i = startA
+let findLowestRegisterA program rawProgram =
+    let mutable i = 1L
     let mutable isFound = false
+    let mutable lastValidA = 7L
 
-    while i <= endA && not isFound do
+    while not isFound do
+        let candidateStr = $"{Convert.ToString(i, 8)}{Convert.ToString(lastValidA, 8)}"
+        let candidate = Convert.ToInt64(candidateStr, 8)
+
         try
             try
-                if i % 1000000 = 0 then
-                    printfn ">>> attempting A = %d" i
+                // if i % 1000000 = 0 then
+                let struct (_, currentPosition) = Console.GetCursorPosition()
+                Console.SetCursorPosition(0, currentPosition - 1)
+                printfn ">>> attempting A = %s" (Convert.ToString(candidate, 8))
 
-                let (output, _) = executeProgram { A = i; B = 0; C = 0 } program rawProgram
+                let (output, _) = executeProgram { A = candidate; B = 0; C = 0 } program rawProgram
+
+                lastValidA <- candidate
+                i <- 0L
+
+                let registerDisplay = $"{candidate,15}, {Convert.ToString(candidate, 8),15}, {Convert.ToString(candidate, 2),48}"
+                let outputAsOctal = Convert.ToInt64(String.Join("", output), 8)
+                let outputDisplay = $"{Convert.ToString(outputAsOctal, 8),15}, {Convert.ToString(outputAsOctal, 2),48}"
+
+                Console.WriteLine($"[{registerDisplay}] output = {outputDisplay}\n")
 
                 if output = rawProgram then
                     isFound <- true
             with
             | _ -> () // Consume exception and continue
         finally
-            if not isFound then i <- i + 1
+            if not isFound then i <- i + 1L
 
-    if isFound then Some i else None
+    if isFound then Some lastValidA else None
 
-// let (output, _) = executeProgram { A = 117440; B = 0; C = 0 } program rawProgram
-// let results = String.Join(',', output)
+// Target: 88714211294040, 10100001010111101100011000011001111101101011000
 
-// printfn "\n\noutput =\n%A" results
+// [              7,               7,                                              111] output =               2,                                               10
+// [             15,              17,                                             1111] output =              24,                                            10100
+// [          15375,           36017,                                   11110000001111] output =           24127,                                   10100001010111
+// [          80911,          236017,                                10011110000001111] output =          241275,                                10100001010111101
+// [         343055,         1236017,                              1010011110000001111] output =         2412754,                             10100001010111101100
 
-let args = Environment.GetCommandLineArgs() |> Array.skip 1
 
-if args.Length < 1 then
-    raise <| ApplicationException("Too many command-line arguments.")
+let targetAsOctal = Convert.ToInt64(String.Join("", rawProgram), 8)
 
-let section = int args[0]
+Console.WriteLine($"Target: {Convert.ToString(targetAsOctal, 8),6}, {Convert.ToString(targetAsOctal, 2), 20}\n")
 
-if section < 1 || section > 5 then
-    raise <| ApplicationException($"Invalid section value: {section}")
-
-let endA =
-    (fun x ->
-        let e = x * 1000000000L
-        if e > Int32.MaxValue then Int32.MaxValue else int e) section
-let startA = (section - 1) * 1000000000
-
-printfn "\n\nstart = %d, end = %d" startA endA
-
-let results = findLowestRegisterA program rawProgram startA endA
+let results = findLowestRegisterA program rawProgram
 
 printfn "\n\nlowest = %A" results
