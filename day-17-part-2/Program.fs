@@ -23,6 +23,7 @@
 open System
 open System.IO
 open System.Text.RegularExpressions
+open System.Collections.Generic
 open Common
 
 type Opcode =
@@ -165,35 +166,44 @@ let findLowestRegisterA program rawProgram =
     let mutable i = 1L
     let mutable isFound = false
     let mutable lastValidA = 7L
+    let progressStack = Stack()
+    let searchLimit = 10000000L
 
     while not isFound do
-        let candidateStr = $"{Convert.ToString(i, 8)}{Convert.ToString(lastValidA, 8)}"
-        let candidate = Convert.ToInt64(candidateStr, 8)
+        if i > searchLimit then
+            let (priorValidA, newI) = progressStack.Pop()
+            lastValidA <- priorValidA
+            i <- newI
+            printfn "backtracked to %s at %d\n" (Convert.ToString(priorValidA, 8)) newI
+        else
+            let candidateStr = $"{Convert.ToString(i, 8)}{Convert.ToString(lastValidA, 8)}"
+            let candidate = Convert.ToInt64(candidateStr, 8)
 
-        try
             try
-                // if i % 1000000 = 0 then
-                let struct (_, currentPosition) = Console.GetCursorPosition()
-                Console.SetCursorPosition(0, currentPosition - 1)
-                printfn ">>> attempting A = %s" (Convert.ToString(candidate, 8))
+                try
+                    if i % 1000000L = 0L then
+                        let struct (_, currentPosition) = Console.GetCursorPosition()
+                        Console.SetCursorPosition(0, currentPosition - 1)
+                        printfn ">>> attempting A = %s" (Convert.ToString(candidate, 8))
 
-                let (output, _) = executeProgram { A = candidate; B = 0; C = 0 } program rawProgram
+                    let (output, _) = executeProgram { A = candidate; B = 0; C = 0 } program rawProgram
 
-                lastValidA <- candidate
-                i <- 0L
+                    progressStack.Push((lastValidA, i + 1L))
+                    lastValidA <- candidate
+                    i <- 0L
 
-                let registerDisplay = $"{candidate,15}, {Convert.ToString(candidate, 8),15}, {Convert.ToString(candidate, 2),48}"
-                let outputAsOctal = Convert.ToInt64(String.Join("", output), 8)
-                let outputDisplay = $"{Convert.ToString(outputAsOctal, 8),15}, {Convert.ToString(outputAsOctal, 2),48}"
+                    let registerDisplay = $"{candidate,15}, {Convert.ToString(candidate, 8),15}, {Convert.ToString(candidate, 2),48}"
+                    let outputAsOctal = Convert.ToInt64(String.Join("", output), 8)
+                    let outputDisplay = $"{Convert.ToString(outputAsOctal, 8),15}, {Convert.ToString(outputAsOctal, 2),48}"
 
-                Console.WriteLine($"[{registerDisplay}] output = {outputDisplay}\n")
+                    Console.WriteLine($"[{registerDisplay}] output = {outputDisplay}\n")
 
-                if output = rawProgram then
-                    isFound <- true
-            with
-            | _ -> () // Consume exception and continue
-        finally
-            if not isFound then i <- i + 1L
+                    if output = rawProgram then
+                        isFound <- true
+                with
+                | _ -> () // Consume exception and continue
+            finally
+                if not isFound then i <- i + 1L
 
     if isFound then Some lastValidA else None
 
