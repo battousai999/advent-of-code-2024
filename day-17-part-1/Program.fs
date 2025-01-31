@@ -84,3 +84,134 @@ open System
 open System.IO
 open System.Text.RegularExpressions
 open Common
+
+type Opcode =
+| Adv = 0
+| Bxl = 1
+| Bst = 2
+| Jnz = 3
+| Bxc = 4
+| Out = 5
+| Bdv = 6
+| Cdv = 7
+
+type Instruction = {
+    Opcode: Opcode
+    Operand: int
+}
+
+type Registers = {
+    A: int
+    B: int
+    C: int
+}
+
+type ExecutionContext = {
+    Registers: Registers
+    Program: Instruction list
+    InstructionPointer: int
+}
+
+let registerRegex = Regex(@"Register\sA:\s(\d+)\s+Register\sB:\s(\d+)\s+Register\sC:\s(\d+)")
+let programRegex = Regex(@"Program: ([\d,]+)")
+
+let rawInput = File.ReadAllText("./input.txt")
+
+// let rawInput = @"Register A: 729
+// Register B: 0
+// Register C: 0
+
+// Program: 0,1,5,4,3,0"
+
+let registers =
+    match rawInput with
+    | Regexer registerRegex [a; b; c] -> { A = int a; B = int b; C = int c }
+    | _ -> raise <| ApplicationException($"Invalid registers format within input: {rawInput}")
+
+let program =
+    match rawInput with
+    | Regexer programRegex [p] ->
+        let bytes = p.Split(',')
+        let bytePairs = bytes |> Array.chunkBySize 2
+
+        bytePairs
+        |> Array.map
+            (fun pair ->
+                match pair with
+                | [|rawOpcode; operand|] ->
+                    let opcode =
+                        if Enum.IsDefined (typedefof<Opcode>, int rawOpcode) then
+                            enum<Opcode> (int rawOpcode)
+                        else
+                            raise <| ApplicationException($"Invalid opcode value: {rawOpcode}")
+
+                    { Opcode = opcode; Operand = int operand }
+                | _ ->
+                    let text = sprintf "%A" pair
+                    raise <| ApplicationException($"Invalid instruction pair: {text}"))
+        |> List.ofArray
+    | _ -> raise <| ApplicationException($"Invalid program format within input: {rawInput}")
+
+printfn "registers =\n%A\n\nprogram =\n%A" registers program
+
+let executeOpcode registers instruction =
+    let combo operand =
+        match operand with
+        | x when x >= 0 && x <= 3 -> x
+        | 4 -> registers.A
+        | 5 -> registers.B
+        | 6 -> registers.C
+        | _ ->
+            let formattedInstruction = sprintf "%A" instruction
+            raise <| ApplicationException($"Invalid combo operand ({operand}) in instruction: {formattedInstruction}")
+
+    match instruction.Opcode with
+    | Opcode.Adv ->
+        let newA = registers.A / (pown 2 (combo instruction.Operand)) // may need to use something more efficient that pown later on
+        ({ registers with A = newA }, None, None)
+    | Opcode.Bxl ->
+        let newB = registers.B ^^^ instruction.Operand
+        ({ registers with B = newB }, None, None)
+    | Opcode.Bst ->
+        let newB = (combo instruction.Operand) % 8
+        ({ registers with B = newB }, None, None)
+    | Opcode.Jnz ->
+        let newInstructionPointer = if registers.A <> 0 then Some (instruction.Operand / 2) else None
+        (registers, None, newInstructionPointer)
+    | Opcode.Bxc ->
+        let newB = registers.B ^^^ registers.C
+        ({ registers with B = newB }, None, None)
+    | Opcode.Out ->
+        let output = (combo instruction.Operand) % 8
+        (registers, Some output, None)
+    | Opcode.Bdv ->
+        let newB = registers.A / (pown 2 (combo instruction.Operand)) // may need to use something more efficient that pown later on
+        ({ registers with B = newB }, None, None)
+    | Opcode.Cdv ->
+        let newC = registers.A / (pown 2 (combo instruction.Operand)) // may need to use something more efficient that pown later on
+        ({ registers with C = newC }, None, None)
+    | _ -> raise <| ApplicationException($"Invalid instruction opcode: {instruction.Opcode}")
+
+
+let executeProgram registers program =
+    let mutable context = { Registers = registers; Program = program; InstructionPointer = 0 }
+    let mutable output = []
+    let isHalted () = context.InstructionPointer >= context.Program.Length
+
+    while not <| isHalted () do
+        let currentInstruction = program[context.InstructionPointer]
+        let (newRegisters, newOutput, newInstructionPointer) = executeOpcode context.Registers currentInstruction
+
+        newOutput |> Option.iter (fun out -> output <- out :: output)
+
+        context <-
+            { context with
+                Registers = newRegisters
+                InstructionPointer = newInstructionPointer |> Option.defaultWith (fun () -> context.InstructionPointer + 1)}
+
+    (output |> List.rev, context.Registers)
+
+let (output, _) = executeProgram registers program
+let results = String.Join(',', output)
+
+printfn "\n\noutput = %s" results
