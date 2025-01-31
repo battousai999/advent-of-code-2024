@@ -206,6 +206,26 @@ let findLowestRegisterA program rawProgram =
 // [         343055,         1236017,                              1010011110000001111] output =         2412754,                             10100001010111101100
 
 
+// my program:
+//
+// b = a % 8            // b = last 3 binary digits of a
+// b = b xor 2          // up to this point, b = last 3 binary digits of a with second digit flipped
+// c = a / (2 ** b)     // or c = a >> b (i.e., a rightshift b digits)
+// b = b xor c
+// a = a / (2 ** 3)     // a = a >> 3 (i.e, a loses its last 3 binary digits, getting smaller for each loop)
+// b = b xor 7
+// out(b % 8)           // what's output will always be the last 3 binary digits of b
+// jnz 0                // jump back to beginning until a has lost all of its digits
+
+// Notes:
+// * Whatever happens to b during the loop, we only really care about the last 3 digits as it will be %-ed by 8
+// * b does not carry over (it will be overwritten at the beginning of each loop)
+// * a slowly (3 digits at a time) gets whittled on the right (least-significant digits)
+// * c also does not carry over (it gets overwritten near the beginning of the loop)
+// * the a = ... line only has a as a dependency, so it could be moved to just before the jump without affecting the program
+// * b = (((b xor 2) xor c) xor 7) % 8
+// * c = a >> ((a % 8) xor 2)
+
 let targetAsOctal = Convert.ToInt64(String.Join("", rawProgram), 8)
 
 Console.WriteLine($"Target: {Convert.ToString(targetAsOctal, 8),6}, {Convert.ToString(targetAsOctal, 2), 20}\n")
