@@ -102,23 +102,23 @@ printfn "registers =\n%A\n\nprogram =\n%A" registers program
 let executeOpcode registers instruction =
     let combo operand =
         match operand with
-        | x when x >= 0 && x <= 3 -> x
-        | 4 -> int registers.A
-        | 5 -> int registers.B
-        | 6 -> int registers.C
+        | x when x >= 0 && x <= 3 -> int64 x
+        | 4 -> registers.A
+        | 5 -> registers.B
+        | 6 -> registers.C
         | _ ->
             let formattedInstruction = sprintf "%A" instruction
             raise <| ApplicationException($"Invalid combo operand ({operand}) in instruction: {formattedInstruction}")
 
     match instruction.Opcode with
     | Opcode.Adv ->
-        let newA = registers.A / (int64 (pown 2 (combo instruction.Operand))) // may need to use something more efficient that pown later on
+        let newA = registers.A / (int64 (pown 2L (int (combo instruction.Operand)))) // may need to use something more efficient that pown later on
         ({ registers with A = newA }, None, None)
     | Opcode.Bxl ->
         let newB = registers.B ^^^ instruction.Operand
         ({ registers with B = newB }, None, None)
     | Opcode.Bst ->
-        let newB = (combo instruction.Operand) % 8
+        let newB = (combo instruction.Operand) % 8L
         ({ registers with B = newB }, None, None)
     | Opcode.Jnz ->
         let newInstructionPointer = if registers.A <> 0 then Some (instruction.Operand / 2) else None
@@ -127,13 +127,13 @@ let executeOpcode registers instruction =
         let newB = registers.B ^^^ registers.C
         ({ registers with B = newB }, None, None)
     | Opcode.Out ->
-        let output = (combo instruction.Operand) % 8
+        let output = (int (combo instruction.Operand)) % 8
         (registers, Some output, None)
     | Opcode.Bdv ->
-        let newB = registers.A / (int64 (pown 2 (combo instruction.Operand))) // may need to use something more efficient that pown later on
+        let newB = registers.A / (int64 (pown 2L (int (combo instruction.Operand)))) // may need to use something more efficient that pown later on
         ({ registers with B = newB }, None, None)
     | Opcode.Cdv ->
-        let newC = registers.A / (int64 (pown 2 (combo instruction.Operand))) // may need to use something more efficient that pown later on
+        let newC = registers.A / (int64 (pown 2L (int (combo instruction.Operand)))) // may need to use something more efficient that pown later on
         ({ registers with C = newC }, None, None)
     | _ -> raise <| ApplicationException($"Invalid instruction opcode: {instruction.Opcode}")
 
@@ -149,9 +149,9 @@ let executeProgram registers program requiredOutput =
 
         if Option.isSome newOutput then
             newOutput |> Option.iter (fun out -> output <- out :: output)
-            let satisfiesRequiredOutput = (Seq.ofList output |> Seq.rev, Seq.ofList requiredOutput) ||> Seq.forall2 (fun x1 x2 -> x1 = x2)
+            let satisfiesRequiredOutput () = (Seq.ofList output |> Seq.rev, Seq.ofList (Option.get requiredOutput)) ||> Seq.forall2 (fun x1 x2 -> x1 = x2)
 
-            if not satisfiesRequiredOutput then
+            if Option.isSome requiredOutput && not <| satisfiesRequiredOutput() then
                 // printfn ">>> output = %A, expected = %A" output requiredOutput
                 raise <| ApplicationException($"Register A did not satisfy required output: {registers.A}")
 
@@ -161,6 +161,47 @@ let executeProgram registers program requiredOutput =
                 InstructionPointer = newInstructionPointer |> Option.defaultWith (fun () -> context.InstructionPointer + 1)}
 
     (output |> List.rev, context.Registers)
+
+let findLowestRegisterABackwards (rawProgram: int list) program =
+    let mutable candidates: int64 list = [0]
+    let reverseProgram = rawProgram |> List.rev
+    let octalDigits = [0..7]
+
+    reverseProgram
+    |> getListSequences
+    |> List.map List.rev
+    |> List.iter
+        (fun sectionToMatch ->
+            let mutable newCandidates = []
+
+            candidates
+            |> List.iter
+                (fun candidate ->
+                    octalDigits
+                    |> List.iter
+                        (fun digit ->
+                            let candidateAsOctal = Convert.ToString(candidate, 8)
+                            let targetAsOctal = candidateAsOctal + Convert.ToString(digit, 8)
+                            let target = Convert.ToInt64(targetAsOctal, 8)
+
+                            printfn "> target = %d" target
+
+                            try
+                                let (output, _) = executeProgram { A = target; B = 0; C = 0 } program None
+
+                                printfn ">> output = %A" output
+
+                                if sectionToMatch = output then
+                                    newCandidates <- target :: newCandidates
+                            with
+                            | _ -> ()
+                            ))
+
+            printfn ">>> %A" newCandidates
+
+            candidates <- newCandidates)
+
+    candidates |> List.min
 
 let findLowestRegisterA program rawProgram =
     let mutable i = 1L
@@ -186,7 +227,7 @@ let findLowestRegisterA program rawProgram =
                         Console.SetCursorPosition(0, currentPosition - 1)
                         printfn ">>> attempting A = %s" (Convert.ToString(candidate, 8))
 
-                    let (output, _) = executeProgram { A = candidate; B = 0; C = 0 } program rawProgram
+                    let (output, _) = executeProgram { A = candidate; B = 0; C = 0 } program (Some rawProgram)
 
                     progressStack.Push((lastValidA, i + 1L))
                     lastValidA <- candidate
@@ -240,6 +281,8 @@ let targetAsOctal = Convert.ToInt64(String.Join("", rawProgram), 8)
 
 Console.WriteLine($"Target: {Convert.ToString(targetAsOctal, 8),6}, {Convert.ToString(targetAsOctal, 2), 20}\n")
 
-let results = findLowestRegisterA program rawProgram
+// let results = findLowestRegisterA program rawProgram
+
+let results = findLowestRegisterABackwards rawProgram program
 
 printfn "\n\nlowest = %A" results

@@ -237,3 +237,14 @@ let getShortestPath<'a when 'a: equality> (source: Vertex<'a>) (target: Vertex<'
             current <- if prevMap.ContainsKey(Option.get current) then Some prevMap[Option.get current] else None
 
     path
+
+// So, for [1; 2; 3; 4] returns [ [1]; [1; 2]; [1; 2; 3]; [1; 2; 3; 4] ]
+let getListSequences list =
+    list
+    |> List.fold
+        (fun (acc, prev) x ->
+            let newSequence = prev @ [x]
+            (acc @ [newSequence], newSequence)
+            )
+        ([], [])
+    |> fst
