@@ -23,7 +23,6 @@
 open System
 open System.IO
 open System.Text.RegularExpressions
-open System.Collections.Generic
 open Common
 
 type Opcode =
@@ -128,7 +127,7 @@ let executeOpcode registers instruction =
         ({ registers with B = newB }, None, None)
     | Opcode.Out ->
         let output = (int (combo instruction.Operand)) % 8
-        (registers, Some output, None)
+        (registers, Some (if output < 0 then output + 8 else output), None)
     | Opcode.Bdv ->
         let newB = registers.A / (int64 (pown 2L (int (combo instruction.Operand)))) // may need to use something more efficient that pown later on
         ({ registers with B = newB }, None, None)
@@ -138,7 +137,7 @@ let executeOpcode registers instruction =
     | _ -> raise <| ApplicationException($"Invalid instruction opcode: {instruction.Opcode}")
 
 
-let executeProgram registers program requiredOutput =
+let executeProgram registers program =
     let mutable context = { Registers = registers; Program = program; InstructionPointer = 0 }
     let mutable output = []
     let isHalted () = context.InstructionPointer >= context.Program.Length
@@ -149,11 +148,6 @@ let executeProgram registers program requiredOutput =
 
         if Option.isSome newOutput then
             newOutput |> Option.iter (fun out -> output <- out :: output)
-            let satisfiesRequiredOutput () = (Seq.ofList output |> Seq.rev, Seq.ofList (Option.get requiredOutput)) ||> Seq.forall2 (fun x1 x2 -> x1 = x2)
-
-            if Option.isSome requiredOutput && not <| satisfiesRequiredOutput() then
-                // printfn ">>> output = %A, expected = %A" output requiredOutput
-                raise <| ApplicationException($"Register A did not satisfy required output: {registers.A}")
 
         context <-
             { context with
@@ -184,12 +178,8 @@ let findLowestRegisterABackwards (rawProgram: int list) program =
                             let targetAsOctal = candidateAsOctal + Convert.ToString(digit, 8)
                             let target = Convert.ToInt64(targetAsOctal, 8)
 
-                            printfn "> target = %d" target
-
                             try
-                                let (output, _) = executeProgram { A = target; B = 0; C = 0 } program None
-
-                                printfn ">> output = %A" output
+                                let (output, _) = executeProgram { A = target; B = 0; C = 0 } program
 
                                 if sectionToMatch = output then
                                     newCandidates <- target :: newCandidates
@@ -197,56 +187,9 @@ let findLowestRegisterABackwards (rawProgram: int list) program =
                             | _ -> ()
                             ))
 
-            printfn ">>> %A" newCandidates
-
             candidates <- newCandidates)
 
     candidates |> List.min
-
-let findLowestRegisterA program rawProgram =
-    let mutable i = 1L
-    let mutable isFound = false
-    let mutable lastValidA = 7L
-    let progressStack = Stack()
-    let searchLimit = 10000000L
-
-    while not isFound do
-        if i > searchLimit then
-            let (priorValidA, newI) = progressStack.Pop()
-            lastValidA <- priorValidA
-            i <- newI
-            printfn "backtracked to %s at %d\n" (Convert.ToString(priorValidA, 8)) newI
-        else
-            let candidateStr = $"{Convert.ToString(i, 8)}{Convert.ToString(lastValidA, 8)}"
-            let candidate = Convert.ToInt64(candidateStr, 8)
-
-            try
-                try
-                    if i % 1000000L = 0L then
-                        let struct (_, currentPosition) = Console.GetCursorPosition()
-                        Console.SetCursorPosition(0, currentPosition - 1)
-                        printfn ">>> attempting A = %s" (Convert.ToString(candidate, 8))
-
-                    let (output, _) = executeProgram { A = candidate; B = 0; C = 0 } program (Some rawProgram)
-
-                    progressStack.Push((lastValidA, i + 1L))
-                    lastValidA <- candidate
-                    i <- 0L
-
-                    let registerDisplay = $"{candidate,15}, {Convert.ToString(candidate, 8),15}, {Convert.ToString(candidate, 2),48}"
-                    let outputAsOctal = Convert.ToInt64(String.Join("", output), 8)
-                    let outputDisplay = $"{Convert.ToString(outputAsOctal, 8),15}, {Convert.ToString(outputAsOctal, 2),48}"
-
-                    Console.WriteLine($"[{registerDisplay}] output = {outputDisplay}\n")
-
-                    if output = rawProgram then
-                        isFound <- true
-                with
-                | _ -> () // Consume exception and continue
-            finally
-                if not isFound then i <- i + 1L
-
-    if isFound then Some lastValidA else None
 
 // Target: 88714211294040, 10100001010111101100011000011001111101101011000
 
@@ -276,12 +219,6 @@ let findLowestRegisterA program rawProgram =
 // * the a = ... line only has a as a dependency, so it could be moved to just before the jump without affecting the program
 // * b = (((b xor 2) xor c) xor 7) % 8
 // * c = a >> ((a % 8) xor 2)
-
-let targetAsOctal = Convert.ToInt64(String.Join("", rawProgram), 8)
-
-Console.WriteLine($"Target: {Convert.ToString(targetAsOctal, 8),6}, {Convert.ToString(targetAsOctal, 2), 20}\n")
-
-// let results = findLowestRegisterA program rawProgram
 
 let results = findLowestRegisterABackwards rawProgram program
 
