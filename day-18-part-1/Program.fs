@@ -83,44 +83,52 @@ type Point = {
     Y: int
 }
 
+type Direction =
+| North
+| East
+| South
+| West
+
+let directions = [North; East; South; West]
+
 type MapElement =
 | Empty
 | Corrupted
 
-// let gridSize = 71
-// let numCorruptions = 1024
-// let rawPositions = File.ReadAllLines("./input.txt")
+let gridSize = 71
+let numCorruptions = 1024
+let rawPositions = File.ReadAllLines("./input.txt")
 
-let gridSize = 7
-let numCorruptions = 12
+// let gridSize = 7
+// let numCorruptions = 12
 
-let rawPositionsStr = @"5,4
-4,2
-4,5
-3,0
-2,1
-6,3
-2,4
-1,5
-0,6
-3,3
-2,6
-5,1
-1,2
-5,5
-2,5
-6,5
-1,4
-0,4
-6,4
-1,1
-6,1
-1,0
-0,5
-1,6
-2,0"
+// let rawPositionsStr = @"5,4
+// 4,2
+// 4,5
+// 3,0
+// 2,1
+// 6,3
+// 2,4
+// 1,5
+// 0,6
+// 3,3
+// 2,6
+// 5,1
+// 1,2
+// 5,5
+// 2,5
+// 6,5
+// 1,4
+// 0,4
+// 6,4
+// 1,1
+// 6,1
+// 1,0
+// 0,5
+// 1,6
+// 2,0"
 
-let rawPositions = rawPositionsStr.Split(Environment.NewLine)
+// let rawPositions = rawPositionsStr.Split(Environment.NewLine)
 
 let startingPosition = { X = 0; Y = 0 }
 let endingPosition = { X = gridSize - 1; Y = gridSize - 1 }
@@ -142,6 +150,14 @@ let sequenceOfMapPoints () =
         yield (i,j)
     }
 
+let getPointInDirection position direction =
+    match direction with
+    | North when position.Y > 0            -> Some { X = position.X;     Y = position.Y - 1 }
+    | East  when position.X < gridSize - 1 -> Some { X = position.X + 1; Y = position.Y     }
+    | South when position.Y < gridSize - 1 -> Some { X = position.X;     Y = position.Y + 1 }
+    | West  when position.X > 0            -> Some { X = position.X - 1; Y = position.Y     }
+    | _ -> None
+
 let buildGraph (corruptionPositions: HashSet<Point>) =
     let vertices = HashSet()
     let edges = ResizeArray()
@@ -153,9 +169,31 @@ let buildGraph (corruptionPositions: HashSet<Point>) =
 
             if not <| corruptionPositions.Contains(position) then
                 let vertex = { Data = position }
+                let neighbors =
+                    directions
+                    |> List.choose
+                        (fun direction ->
+                            getPointInDirection position direction
+                            |> Option.filter (fun neighborPoint -> not <| corruptionPositions.Contains(neighborPoint)))
 
                 vertices.Add(vertex) |> ignore
 
-                )
+                neighbors
+                |> List.iter
+                    (fun neighbor ->
+                        let neighborVertex = { Data = neighbor }
+
+                        vertices.Add(neighborVertex) |> ignore
+                        edges.Add({ Source = vertex; Dest = neighborVertex; Weight = 1 })))
 
     { Vertices = vertices |> Seq.toList; Edges = edges |> Seq.toList }
+
+let graph = buildGraph corruptionPositions
+
+let startingVertex = graph.Vertices |> List.find (fun v -> v.Data = startingPosition)
+let endingVertex = graph.Vertices |> List.find (fun v -> v.Data = endingPosition)
+
+let results = dijkstra graph startingVertex endingVertex None
+let shortestPath = getShortestPath startingVertex endingVertex results.PrevMap
+
+printfn "\n\nnum steps = %d" ((List.length shortestPath) - 1)

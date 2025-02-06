@@ -139,6 +139,7 @@ type Graph<'a when 'a: equality> = {
 }
 
 type DijkstraResults<'a when 'a: equality> = {
+    IsFound: bool
     DistanceMap: Dictionary<Vertex<'a>, int>
     PrevMap: Dictionary<Vertex<'a>, Vertex<'a>>
 }
@@ -224,7 +225,7 @@ let dijkstra<'a when 'a: equality>
                         if not containsDest then
                             queue.Enqueue(edge.Dest, alternate))
 
-    { DistanceMap = distanceMap; PrevMap = prevMap }
+    { IsFound = isFound; DistanceMap = distanceMap; PrevMap = prevMap }
 
 let getShortestPath<'a when 'a: equality> (source: Vertex<'a>) (target: Vertex<'a>) (prevMap: Dictionary<Vertex<'a>, Vertex<'a>>) =
     let mutable path = []
