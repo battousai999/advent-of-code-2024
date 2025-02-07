@@ -5,6 +5,7 @@
 open System
 open System.IO
 open System.Collections.Concurrent
+open Common
 
 type Tree =
     | Branch of Tree * Tree
@@ -18,16 +19,8 @@ let rawInitialStones = File.ReadAllText "../day-11-part-1/input.txt"
 
 let stonesList = rawInitialStones.Split(' ') |> Array.map int64 |> List.ofArray
 
-let recursiveMemoize func =
-    let cache = ConcurrentDictionary()
-
-    let rec recursiveFunc x =
-        cache.GetOrAdd(x, lazy func recursiveFunc x).Value
-
-    recursiveFunc
-
 // Note: needed to translate to the Y-combinator-associated form of my recursive function in order to memoize it more easily
-let countStones = recursiveMemoize <| (fun recursiveFunc ((iterations, stoneValue): (int * int64)) ->
+let countStones = memoizeRecursiveFunction <| (fun recursiveFunc ((iterations, stoneValue): (int * int64)) ->
     if iterations = 0 then
         1L
     elif stoneValue = 0 then

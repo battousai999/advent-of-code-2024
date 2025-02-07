@@ -10,4 +10,12 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Battousai.ConsoleUtils" Version="1.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\common\common.fsproj" />
+  </ItemGroup>
+
 </Project>

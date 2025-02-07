@@ -4,6 +4,7 @@ open System
 open System.Text
 open System.Text.RegularExpressions
 open System.Collections.Generic
+open System.Collections.Concurrent
 
 let (|Regexer|_|) (regex : Regex) input =
     let m = regex.Match(input)
@@ -249,3 +250,11 @@ let getListSequences list =
             )
         ([], [])
     |> fst
+
+let memoizeRecursiveFunction func =
+    let cache = ConcurrentDictionary()
+
+    let rec recursiveFunc x =
+        cache.GetOrAdd(x, lazy func recursiveFunc x).Value
+
+    recursiveFunc

@@ -59,3 +59,74 @@
 
 open System
 open System.IO
+open Battousai.Utils.StringUtils
+open Common
+
+let rawInput = File.ReadAllLines("./input.txt")
+
+// let rawInputStr = @"r, wr, b, g, bwu, rb, gb, br
+//
+// brwrr
+// bggr
+// gbbr
+// rrbgbr
+// ubwu
+// bwurrg
+// brgr
+// bbrgwb"
+
+// let rawInput = rawInputStr.Split(Environment.NewLine)
+
+let patternComparer (a: string) (b: string) =
+    if a.Length = b.Length then
+        0
+    elif a.Length < b.Length then
+        -1
+    else
+        1
+
+let patterns =
+    rawInput[0].Split(',')
+    |> Array.map (fun x -> x.Trim())
+    |> List.ofArray
+
+let designs =
+    rawInput
+    |> Array.skip 2
+    |> List.ofArray
+
+let canBuildDesign = memoizeRecursiveFunction <| (fun recursiveFun ((patterns, design): ((string list) * string)) ->
+    if design = String.Empty then
+        true
+    else
+        let matches = patterns |> List.filter (fun p -> design.StartsWith(p))
+
+        matches
+        |> List.exists
+            (fun m ->
+                let rest = design.RemoveLeading(m)
+
+                recursiveFun (patterns, rest)))
+
+let optimizePatterns (patterns: string list) =
+    let rec optimize candidates acceptedPatterns =
+        match candidates with
+        | [] -> acceptedPatterns
+        | pattern :: rest when canBuildDesign (acceptedPatterns, pattern) ->
+            optimize rest acceptedPatterns
+        | pattern :: rest when not <| canBuildDesign (acceptedPatterns, pattern) ->
+            optimize rest (pattern :: acceptedPatterns)
+        | _ ->
+            let candidatesStr = sprintf "%A" candidates
+            raise <| ApplicationException($"Shouldn't be able to get here (but compiler cannot tell): {candidatesStr}")
+
+    optimize patterns []
+
+let optimizedPatterns = optimizePatterns patterns
+
+let numPossible =
+    designs
+    |> List.filter (fun design -> canBuildDesign (optimizedPatterns, design))
+    |> List.length
+
+printfn "%d" numPossible
