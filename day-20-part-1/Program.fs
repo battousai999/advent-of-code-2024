@@ -247,4 +247,44 @@ let endVertex = graph.Vertices |> List.find (fun v -> v.Data = endMapPosition)
 let results = dijkstra graph startVertex endVertex None
 let path = getShortestPath startVertex endVertex results.PrevMap
 
-printfn "\n\n%A" path
+// printfn "\n\n%A" path
+
+let findCheats graph map path =
+    let originalPathLength = path |> List.length
+
+    path
+    |> List.take (originalPathLength - 1)
+    |> List.collect
+        (fun vertex ->
+            let point = vertex.Data
+            let possibleCheats =
+                directions
+                |> List.choose
+                    (fun d ->
+                        getElementInDirection map point d
+                        |> Option.map (fun (p, element) -> (d, p, element)))
+                |> List.filter (fun (_, _, element) -> element = Wall)
+                |> List.choose
+                    (fun (d, p, element) ->
+                        getElementInDirection map p d
+                        |> Option.map(fun (newPoint, newElement) -> (d, newPoint, newElement)))
+                |> List.filter (fun (_, _, element) -> element = Empty)
+                |> List.map
+                    (fun (_, p, _) ->
+                        point, p)
+
+            possibleCheats
+            |> List.map
+                (fun (sourcePoint, destPoint) ->
+                    let sourceVertex = graph.Vertices |> List.find (fun v -> v.Data = sourcePoint)
+                    let destVertex = graph.Vertices |> List.find (fun v -> v.Data = destPoint)
+                    let newGraph = { graph with Edges = { Source = sourceVertex; Dest = destVertex; Weight = 1 } :: graph.Edges }
+                    let newDijkstraResult = dijkstra newGraph startVertex endVertex None
+                    let newShortestPath = getShortestPath startVertex endVertex newDijkstraResult.PrevMap
+
+                    (sourcePoint, destPoint, originalPathLength - (newShortestPath.Length)))
+            |> List.filter (fun (_, _, savings) -> savings > 0))
+
+let cheats = findCheats graph map path
+
+printfn "%A" cheats
