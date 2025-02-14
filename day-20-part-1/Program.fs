@@ -188,15 +188,6 @@ let map =
     rawMap
     |> buildMap Empty projection
 
-map
-|> renderMap
-    (fun element ->
-        match element with
-        | Empty -> '.'
-        | Wall  -> '#'
-        | Start -> 'S'
-        | End   -> 'E')
-
 let getElementInDirection map position direction =
     let sizeX = Array2D.length1 map
     let sizeY = Array2D.length2 map
@@ -250,85 +241,16 @@ let path = getShortestPath startVertex endVertex results.PrevMap
 
 let pathRanks = (path |> List.indexed |> Seq.ofList).ToDictionary(snd >> _.Data, fst)
 
-let mutable emptyCounter = 0
-
-map
-|> renderMapi
-    (fun x y element ->
-        let isOnPath = path |> List.exists (fun v -> v.Data = { X = x; Y = y })
-
-        match element with
-        | Empty ->
-            if isOnPath then
-                'o'
-            else
-                emptyCounter <- emptyCounter + 1
-                '.'
-        | Wall  -> '#'
-        | Start -> 'S'
-        | End   -> 'E')
-
-printfn "\n\nempty=%d" emptyCounter
-
-// printfn "\n\n%A" path
-
-let cappedDijkstra
-    (graph: Graph<Point>)
-    (source: Vertex<Point>)
-    (target: Vertex<Point>)
-    (maxPathLength: int) =
-    let distanceMap = Dictionary<Vertex<Point>, int>()
-    let prevMap = Dictionary<Vertex<Point>, Vertex<Point>>()
-    let queue = PriorityQueue<Vertex<Point>, int>()
-
-    distanceMap[source] <- 0
-
-    graph.Vertices
-    |> List.filter (fun v -> v <> source)
-    |> List.iter (fun v -> distanceMap[v] <- Int32.MaxValue)
-
-    queue.Enqueue(source, 0)
-
-    let mutable isFound = false
-
-    while queue.Count > 0 && not isFound do
-        let current = queue.Dequeue()
-
-        if current = target then
-            isFound <- true
-        else
-            let neighbors = getNeighbors current graph.Edges
-
-            neighbors
-            |> List.iter
-                (fun edge ->
-                    let alternate = distanceMap[current] + edge.Weight
-
-                    if alternate < distanceMap[edge.Dest] then
-                        distanceMap[edge.Dest] <- alternate
-                        prevMap[edge.Dest] <- current
-
-                        let containsDest = queue.UnorderedItems |> Seq.exists (fun ((v, _): struct(Vertex<Point> * int)) -> v = edge.Dest)
-
-                        if alternate <= maxPathLength - 1 && not containsDest then
-                            queue.Enqueue(edge.Dest, alternate))
-
-    { IsFound = isFound; DistanceMap = distanceMap; PrevMap = prevMap }
-
 let savingsThreshold = 100
 
-let findCheats graph map path =
+let findCheats map path =
     let originalPathLength = path |> List.length
-    //let visitedPositions = HashSet()
 
     path
     |> List.take (originalPathLength - 1)
     |> List.collect
         (fun vertex ->
             let point = vertex.Data
-
-            //visitedPositions.Add(point) |> ignore
-
             let possibleCheats =
                 directions
                 |> List.choose
@@ -341,43 +263,19 @@ let findCheats graph map path =
                         getElementInDirection map p d
                         |> Option.map(fun (newPoint, newElement) -> (d, newPoint, newElement)))
                 |> List.filter (fun (_, p, element) -> element = Empty || element = End)
-                |> List.map
-                    (fun (_, p, _) ->
-                        point, p)
-                |> List.filter
-                    (fun (sourcePoint, destPoint) ->
-                        let sourceRank = pathRanks[sourcePoint]
-                        let destRank = pathRanks[destPoint]
-
-                        (sourceRank < destRank))
+                |> List.map (fun (_, p, _) -> point, p)
+                |> List.filter (fun (sourcePoint, destPoint) -> pathRanks[sourcePoint] < pathRanks[destPoint])
 
             possibleCheats
             |> List.map
                 (fun (sourcePoint, destPoint) ->
-                    // let sourceVertex = graph.Vertices |> List.find (fun v -> v.Data = sourcePoint)
-                    // let destVertex = graph.Vertices |> List.find (fun v -> v.Data = destPoint)
                     let sourceRank = pathRanks[sourcePoint]
                     let destRank = pathRanks[destPoint]
-                    // let snippetDijkstraResult = dijkstra graph sourceVertex destVertex None
-                    // let snippetPath = getShortestPath sourceVertex destVertex snippetDijkstraResult.PrevMap
 
-                    (sourcePoint, destPoint, destRank - sourceRank - 2))
-            |> List.filter (fun (_, _, savings) -> savings > 0))
+                    sourcePoint, destPoint, destRank - sourceRank - 2))
 
-let cheats = findCheats graph map path
-
-// let temp = cheats |> List.countBy (fun (_, _, savings) -> savings) |> List.sortBy (fun (savings, _) -> savings)
-
-// printfn "%A" temp
+let cheats = findCheats map path
 
 let applicableCheats = cheats |> List.filter (fun (_, _, savings) -> savings >= savingsThreshold)
 
 printfn "%d" (applicableCheats |> List.length)
-
-//
-// Looks like it still needs an optimization to short-circuit the dijkstra calculation (within the findCheats() function) when it can't get a better
-// savings than 100 (i.e., stop for path candidates whose length is > (initialStartingPath.length - 100)).abs
-//
-// May even need to calculate shortest path between source and dest vertex of the cheat path (without the cheat), in order to see if it saves enough
-// (since that path length, minus 1, should equal the savings).
-//
