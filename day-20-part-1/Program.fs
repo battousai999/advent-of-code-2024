@@ -155,25 +155,25 @@ type Direction =
 
 let directions = [North; East; South; West]
 
-// let rawMap = File.ReadAllLines("./input.txt")
+let rawMap = File.ReadAllLines("./input.txt")
 
-let rawMapStr = @"###############
-#...#...#.....#
-#.#.#.#.#.###.#
-#S#...#.#.#...#
-#######.#.#.###
-#######.#.#...#
-#######.#.###.#
-###..E#...#...#
-###.#######.###
-#...###...#...#
-#.#####.#.###.#
-#.#...#.#.#...#
-#.#.#.#.#.#.###
-#...#...#...###
-###############"
+// let rawMapStr = @"###############
+// #...#...#.....#
+// #.#.#.#.#.###.#
+// #S#...#.#.#...#
+// #######.#.#.###
+// #######.#.#...#
+// #######.#.###.#
+// ###..E#...#...#
+// ###.#######.###
+// #...###...#...#
+// #.#####.#.###.#
+// #.#...#.#.#...#
+// #.#.#.#.#.#.###
+// #...#...#...###
+// ###############"
 
-let rawMap = rawMapStr.Split(Environment.NewLine)
+// let rawMap = rawMapStr.Split(Environment.NewLine)
 
 let map =
     let projection ch =
@@ -268,7 +268,7 @@ let findCheats graph map path =
                     (fun (d, p, element) ->
                         getElementInDirection map p d
                         |> Option.map(fun (newPoint, newElement) -> (d, newPoint, newElement)))
-                |> List.filter (fun (_, _, element) -> element = Empty)
+                |> List.filter (fun (_, _, element) -> element = Empty || element = End)
                 |> List.map
                     (fun (_, p, _) ->
                         point, p)
@@ -282,9 +282,21 @@ let findCheats graph map path =
                     let newDijkstraResult = dijkstra newGraph startVertex endVertex None
                     let newShortestPath = getShortestPath startVertex endVertex newDijkstraResult.PrevMap
 
-                    (sourcePoint, destPoint, originalPathLength - (newShortestPath.Length)))
+                    (sourcePoint, destPoint, originalPathLength - (newShortestPath.Length + 1)))
             |> List.filter (fun (_, _, savings) -> savings > 0))
 
 let cheats = findCheats graph map path
 
-printfn "%A" cheats
+// let temp = cheats |> List.countBy (fun (_, _, savings) -> savings) |> List.sortBy (fun (savings, _) -> savings)
+
+let applicableCheats = cheats |> List.filter (fun (_, _, savings) -> savings >= 100)
+
+printfn "%d" (applicableCheats |> List.length)
+
+//
+// Looks like it still needs an optimization to short-circuit the dijkstra calculation (within the findCheats() function) when it can't get a better
+// savings than 100 (i.e., stop for path candidates whose length is > (initialStartingPath.length - 100)).abs
+//
+// May even need to calculate shortest path between source and dest vertex of the cheat path (without the cheat), in order to see if it saves enough
+// (since that path length, minus 1, should equal the savings).
+//
