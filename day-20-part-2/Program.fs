@@ -172,8 +172,6 @@ let path = getShortestPath startVertex endVertex results.PrevMap
 
 let pathRanks = (path |> List.indexed |> Seq.ofList).ToDictionary(snd >> _.Data, fst)
 
-let savingsThreshold = 100
-
 let getPointsInRange map distance startingPoint =
     let xSize = map |> Array2D.length1
     let ySize = map |> Array2D.length2
@@ -215,16 +213,27 @@ let findCheats map path =
     |> List.collect
         (fun vertex ->
             let sourcePoint = vertex.Data
-            let possibleCheats =
-                let possibleDestPoints =
-                    getPointsInRange map 20 sourcePoint
-                    |> List.filter
-                        (fun p ->
-                            let elementAtPoint = map[p.X, p.Y]
+            let sourceRank = pathRanks[sourcePoint]
+            let possibleDestPoints =
+                getPointsInRange map 20 sourcePoint
+                |> Seq.filter
+                    (fun p ->
+                        let elementAtPoint = map[p.X, p.Y]
 
-                            elementAtPoint = Empty || elementAtPoint = End)
+                        elementAtPoint = Empty || elementAtPoint = End)
+                |> List.ofSeq
 
+            possibleDestPoints
+            |> List.choose
+                (fun p ->
+                    let cost = abs(p.X - sourcePoint.X) + abs(p.Y - sourcePoint.Y)
+                    let savings = pathRanks[p] - sourceRank - cost
 
-// TODO: In findCheats, with all "points in range" (should look like a diamond), find points (which will be destPoints) that
-// end on Empty or End and are ranked greater than the sourcePoint that generated the "points in range" (which will be
-// done for each point on inital path).  With sourcePoint and destPoint, savings can be calculated with: pathRanks[destPoint] - pathRanks[sourcePoint] - 2
+                    if savings > 1 then
+                        Some (sourcePoint, p, savings)
+                    else
+                        None))
+
+let cheats = findCheats map path |> List.filter (fun (_, _, savings) -> savings >= 100)
+
+printfn "%d" cheats.Length
