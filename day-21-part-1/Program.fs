@@ -117,6 +117,10 @@ type DirectionalKeypad =
 | Directional_Left  = 3
 | Directional_A     = 4
 
+type DirectedKeypad =
+| Numeric of NumericKeypad
+| Directional of DirectionalKeypad
+
 type KeypadAction =
 | MoveUp
 | MoveRight
@@ -154,17 +158,17 @@ let codes =
     |> List.ofArray
 
 let numericKeypadGraph =
-    let v0 = { Data = NumericKeypad.Numeric_0 }
-    let v1 = { Data = NumericKeypad.Numeric_1 }
-    let v2 = { Data = NumericKeypad.Numeric_2 }
-    let v3 = { Data = NumericKeypad.Numeric_3 }
-    let v4 = { Data = NumericKeypad.Numeric_4 }
-    let v5 = { Data = NumericKeypad.Numeric_5 }
-    let v6 = { Data = NumericKeypad.Numeric_6 }
-    let v7 = { Data = NumericKeypad.Numeric_7 }
-    let v8 = { Data = NumericKeypad.Numeric_8 }
-    let v9 = { Data = NumericKeypad.Numeric_9 }
-    let vA = { Data = NumericKeypad.Numeric_A }
+    let v0 = { Data = Numeric NumericKeypad.Numeric_0 }
+    let v1 = { Data = Numeric NumericKeypad.Numeric_1 }
+    let v2 = { Data = Numeric NumericKeypad.Numeric_2 }
+    let v3 = { Data = Numeric NumericKeypad.Numeric_3 }
+    let v4 = { Data = Numeric NumericKeypad.Numeric_4 }
+    let v5 = { Data = Numeric NumericKeypad.Numeric_5 }
+    let v6 = { Data = Numeric NumericKeypad.Numeric_6 }
+    let v7 = { Data = Numeric NumericKeypad.Numeric_7 }
+    let v8 = { Data = Numeric NumericKeypad.Numeric_8 }
+    let v9 = { Data = Numeric NumericKeypad.Numeric_9 }
+    let vA = { Data = Numeric NumericKeypad.Numeric_A }
 
     let vertices = [v0; v1; v2; v3; v4; v5; v6; v7; v8; v9; vA]
 
@@ -187,11 +191,11 @@ let numericKeypadGraph =
     { Vertices = vertices; Edges = edges }
 
 let directionalKeypadGraph =
-    let vU = { Data = DirectionalKeypad.Directional_Up }
-    let vR = { Data = DirectionalKeypad.Directional_Right }
-    let vD = { Data = DirectionalKeypad.Directional_Down }
-    let vL = { Data = DirectionalKeypad.Directional_Left }
-    let vA = { Data = DirectionalKeypad.Directional_A }
+    let vU = { Data = Directional DirectionalKeypad.Directional_Up }
+    let vR = { Data = Directional DirectionalKeypad.Directional_Right }
+    let vD = { Data = Directional DirectionalKeypad.Directional_Down }
+    let vL = { Data = Directional DirectionalKeypad.Directional_Left }
+    let vA = { Data = Directional DirectionalKeypad.Directional_A }
 
     let vertices = [ vU; vR; vD; vL; vA ]
 
@@ -210,11 +214,18 @@ let directionalKeypadGraph =
 
 // TODO: May need to refactor this to take a Vertex<DirectedKeypad> as input
 let getNumericKeypadActions path =
-    let firstKey = path |> List.map _.Data |> List.head
+    let unlift dk =
+        match dk with
+        | Numeric nk -> nk
+        | _ ->
+            let displayValue = sprintf "%A" dk
+            raise <| ApplicationException $"Unexpected directed keypad: {displayValue}"
+
+    let firstKey = path |> List.map (_.Data >> unlift) |> List.head
 
     path
     |> List.skip 1
-    |> List.map _.Data
+    |> List.map (_.Data >> unlift)
     |> List.fold
         (fun (prevKey, results) key ->
             let action =
@@ -282,15 +293,84 @@ type State<'a when 'a: equality> = {
     DirectedVertex: DirectedVertex<'a>
 }
 
+let getOppositeDirection direction =
+    match direction with
+    | North -> South
+    | South -> North
+    | East  -> West
+    | West  -> East
 
-// Modified from Common.dijkstra to keep multiple, same-cost paths in the prevMap (from day 16)
-let dijkstra<'a when 'a: equality>
-    (graph: Graph<'a>)
-    (source: Vertex<'a>)
-    (target: Vertex<'a>) =
-    let distanceMap = Dictionary<DirectedVertex<'a>, int>()
-    let prevMap = Dictionary<DirectedVertex<'a>, ResizeArray<DirectedVertex<'a>>>()
-    let queue = PriorityQueue<State<'a>, int>()
+let getEdgeDirection edge =
+    let sourceData = edge.Source.Data
+    let destData = edge.Dest.Data
+
+    match (sourceData, destData) with
+    | (Numeric source, Numeric dest) ->
+        match (source, dest) with
+        | NumericKeypad.Numeric_A, NumericKeypad.Numeric_0 -> West
+        | NumericKeypad.Numeric_A, NumericKeypad.Numeric_3 -> North
+
+        | NumericKeypad.Numeric_0, NumericKeypad.Numeric_A -> East
+        | NumericKeypad.Numeric_0, NumericKeypad.Numeric_2 -> North
+
+        | NumericKeypad.Numeric_1, NumericKeypad.Numeric_2 -> East
+        | NumericKeypad.Numeric_1, NumericKeypad.Numeric_4 -> North
+
+        | NumericKeypad.Numeric_2, NumericKeypad.Numeric_0 -> South
+        | NumericKeypad.Numeric_2, NumericKeypad.Numeric_1 -> West
+        | NumericKeypad.Numeric_2, NumericKeypad.Numeric_3 -> East
+        | NumericKeypad.Numeric_2, NumericKeypad.Numeric_5 -> North
+
+        | NumericKeypad.Numeric_3, NumericKeypad.Numeric_A -> South
+        | NumericKeypad.Numeric_3, NumericKeypad.Numeric_2 -> West
+        | NumericKeypad.Numeric_3, NumericKeypad.Numeric_6 -> North
+
+        | NumericKeypad.Numeric_4, NumericKeypad.Numeric_1 -> South
+        | NumericKeypad.Numeric_4, NumericKeypad.Numeric_5 -> East
+        | NumericKeypad.Numeric_4, NumericKeypad.Numeric_7 -> North
+
+        | NumericKeypad.Numeric_5, NumericKeypad.Numeric_2 -> South
+        | NumericKeypad.Numeric_5, NumericKeypad.Numeric_4 -> West
+        | NumericKeypad.Numeric_5, NumericKeypad.Numeric_6 -> East
+        | NumericKeypad.Numeric_5, NumericKeypad.Numeric_8 -> North
+
+        | NumericKeypad.Numeric_6, NumericKeypad.Numeric_3 -> South
+        | NumericKeypad.Numeric_6, NumericKeypad.Numeric_5 -> West
+        | NumericKeypad.Numeric_6, NumericKeypad.Numeric_9 -> North
+
+        | NumericKeypad.Numeric_7, NumericKeypad.Numeric_4 -> South
+        | NumericKeypad.Numeric_7, NumericKeypad.Numeric_8 -> East
+
+        | NumericKeypad.Numeric_8, NumericKeypad.Numeric_5 -> South
+        | NumericKeypad.Numeric_8, NumericKeypad.Numeric_7 -> West
+        | NumericKeypad.Numeric_8, NumericKeypad.Numeric_9 -> East
+
+        | NumericKeypad.Numeric_9, NumericKeypad.Numeric_6 -> South
+        | NumericKeypad.Numeric_9, NumericKeypad.Numeric_8 -> West
+
+        | _ -> raise <| ApplicationException $"Unexpected numeric edge direction: {source} to {dest}"
+
+    | (Directional source, Directional dest) ->
+        raise <| NotImplementedException()
+    | _ ->
+        let displaySource = sprintf "%A" sourceData
+        let displayDest = sprintf "%A" destData
+        raise <| ApplicationException $"Unexpected edge: {sourceData} -> {destData}"
+
+
+let getVertexFromDirection graph direction vertex =
+    let edge = graph.Edges |> List.find (fun edge -> getEdgeDirection edge = direction && edge.Dest = vertex)
+
+    edge.Source
+
+// Modified from Common.dijkstra to keep multiple, same-cost paths in the prevMap (similar to day 16)
+let dijkstra
+    (graph: Graph<DirectedKeypad>)
+    (source: Vertex<DirectedKeypad>)
+    (target: Vertex<DirectedKeypad>) =
+    let distanceMap = Dictionary<DirectedVertex<DirectedKeypad>, int>()
+    let prevMap = Dictionary<DirectedVertex<DirectedKeypad>, ResizeArray<DirectedVertex<DirectedKeypad>>>()
+    let queue = PriorityQueue<State<DirectedKeypad>, int>()
     let finalStates = HashSet()
     let getDistance dv = if distanceMap.ContainsKey(dv) then distanceMap[dv] else Int32.MaxValue
 
@@ -308,17 +388,21 @@ let dijkstra<'a when 'a: equality>
             let isAtEnd = state.DirectedVertex.Vertex = target
 
             if isAtEnd && state.Cost <= lowestCost then
-                lowestCost <- state.Cost
-                finalStates.Add(state.DirectedVertex) |> ignore
+                if state.Cost = lowestCost then
+                    finalStates.Add(state.DirectedVertex) |> ignore
+                else
+                    lowestCost <- state.Cost
+
+                    finalStates.Clear()
+                    finalStates.Add(state.DirectedVertex) |> ignore
             elif not isAtEnd then
                 let neighbors =
                     getNeighbors state.DirectedVertex.Vertex graph.Edges
                     |> List.filter
                         (fun e ->
-                            let oppositeDirection = getOppositeDirection state.DirectedVertex.Direction
-                            let fromPoint = getPointInDirection oppositeDirection state.DirectedVertex.Vertex.Data
+                            let fromVertex = getVertexFromDirection graph state.DirectedVertex.Direction state.DirectedVertex.Vertex
 
-                            e.Dest.Data <> fromPoint)
+                            e.Dest <> fromVertex)
 
                 neighbors
                 |> List.iter
@@ -344,22 +428,24 @@ let dijkstra<'a when 'a: equality>
 let getActionsSetsForNumericKeypad (keys: NumericKeypad list) =
     keys
     |> List.fold
-        (fun (sourceKey, actions) key ->
-            let shortestPath =
-                let sourceVertex = { Data = sourceKey }
-                let destVertex = { Data = key }
+        (fun (sourceKey, actionSets) key ->
+            let shortestPaths =
+                let sourceVertex = { Data = Numeric sourceKey }
+                let destVertex = { Data = Numeric key }
                 let pathResults = dijkstra numericKeypadGraph sourceVertex destVertex
 
-                getShortestPaths sourceVertex destVertex pathResults.PrevMap
+                // TODO: Need to create this function based upon traversal in day-16 part-2 function calculateTotalPositionsInPaths
+                getShortestReversePaths sourceVertex destVertex pathResults.PrevMap
 
-            let newActions = getNumericKeypadActions shortestPath
+            let newActionsSets = shortestPaths |> List.map getNumericKeypadActions
 
-            (key, newActions :: actions))
-        (NumericKeypad.Numeric_A, [])
-    ||> (fun _ results -> results |> List.rev)
-    |> List.concat
+            let expandActionSet actionSet = newActionsSets |> List.map (fun newActionSet -> newActionSet @ actionSet)
 
-let temp = getActionsForNumericKeypad [
+            (key, actionSets |> List.collect expandActionSet))
+        (NumericKeypad.Numeric_A, [[]])
+    ||> (fun _ results -> results |> List.map List.rev)
+
+let temp = getActionsSetsForNumericKeypad [
     NumericKeypad.Numeric_0;
     NumericKeypad.Numeric_2;
     NumericKeypad.Numeric_9;
@@ -371,6 +457,3 @@ printfn "%A" temp
 
 // TODO: getting this custom dijksra to work with both NumericKeypad and DirectionalKeypad may require
 //       the use of a discriminated union, where the graphs will be of Graph<DirectedKeypad>
-type DirectedKeypad =
-| Numeric of NumericKeypad
-| Directional of DirectionalKeypad
